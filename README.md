@@ -1,10 +1,10 @@
 # fm: FM MIDI synthesizer demo in Python
 Copyright (c) 2019 Bart Massey
 
-This little cross-platform synthesizer (about 100 lines of
-Python) is driven by a MIDI keyboard and outputs to host
-native audio. It was built as a demo of FM synthesis and
-synthesizer construction.
+This little cross-platform polyphonic synthesizer (about 100
+lines of Python) is driven by a MIDI keyboard and outputs to
+host native audio. It was built as a demo of FM synthesis
+and synthesizer construction.
 
 ## Running
 
@@ -21,9 +21,6 @@ the musical keyboard (the topmost keys on a 49-key keyboard)
 simultaneously.
 
 ## Limitations
-
-* The synthesizer is monophonic. Polyphony is planned for a
-  future version.
 
 * The FM synthesizer is a textbook 2-operator unit. More
   general operators and flowgraphs are planned. The
@@ -47,8 +44,6 @@ simultaneously.
 * JACK is not supported.
 
 ## Future Work
-
-* Add polyphony.
 
 * Add envelopes.
 

@@ -26,36 +26,47 @@ amod = float(sys.argv[2])
 # Sample rate.
 rate = 48000
 
-# Current carrier frequency, for silence detection.
-fcarrier = None
+# Keymap contains currently-held keys.
+keymap = set()
 
 # Current tick in current waveform.
 t = 0
 
+# Conversion factor for Hz to radians.
+hz_to_rads = 2 * math.pi / rate
+
+# Conversion table for keys to Hz.
+key_to_hz = [440 * 2**((key - 69) / 12)
+             for key in range(128)]
+
 def op():
     """FM operator. (Technically two operators.)"""
     global t
-    # Don't call this while silenced.
-    assert fcarrier != None
-    # Carrier frequency in radians.
-    wc = 2 * math.pi * fcarrier / rate
-    # Mod frequency in radians.
-    wm = 2 * math.pi * fcarrier * qmod / rate
-    # Next sample.
-    result = 0.5 * math.sin(wc * (t + amod * math.sin(wm * t)))
+    # Sample to be output.
+    s = 0
+    keys = set(keymap)
+    for key in keys:
+        # Set carrier frequency based on key.
+        fcarrier = key_to_hz[key]
+        # Carrier frequency in radians.
+        wc = fcarrier * hz_to_rads
+        # Mod frequency in radians.
+        wm = qmod * wc
+        # Next sample.
+        s += math.sin(wc * (t + amod * math.sin(wm * t)))
     # Advance tick.
     t += 1
-    return result
+    return 0.5 * s / max(len(keys), 1)
 
 def callback(in_data, frame_count, time_info, status):
     """Supply frames to PortAudio."""
-    if fcarrier == None:
-        # Frames of silence.
-        data = [0]*frame_count
-    else:
-        # Frames of waveform.
-        data = [int(32767.0 * op())
-                for _ in range(frame_count)]
+    # Zero tick on every silence.
+    if len(keymap) == 0:
+        global t
+        t = 0
+    # Frames of waveform.
+    data = [int(32767.0 * op())
+            for _ in range(frame_count)]
     # Get the frames into the right format for PA.
     frames = bytes(array.array('h', data))
     # Return frames and continue signal.
@@ -70,32 +81,21 @@ stream = pa.open(
     output=True,
     stream_callback=callback)
 
-# Keymap is True for currently-held keys.
-keymap = [False] * 128
-# Key of current note.
-cur_on = None
 # Process key events and modify the PA play freq.
 while True:
     mesg = inport.receive()
     if mesg.type == 'note_on':
-        keymap[mesg.note] = True
+        print('note on', mesg.note)
+        keymap.add(mesg.note)
         # XXX Exit synth when B5 and C5 are held together.
-        if keymap[83] and keymap[84]:
+        if 83 in keymap and 84 in keymap:
             break
-        print('key on', mesg.note)
-        # Start a new note even if already held (same key).
-        cur_on = mesg.note
-        # Set carrier frequency based on key.
-        fcarrier = 440 * 2**((mesg.note - 69) / 12)
     elif mesg.type == 'note_off':
-        print('key off', mesg.note)
-        keymap[mesg.note] = False
-        # Don't clear current note on legato.
-        if cur_on != mesg.note:
-            continue
-        # Silence the synth.
-        cur_on = None
-        fcarrier = None
+        print('note off', mesg.note)
+        if mesg.note in keymap:
+            keymap.remove(mesg.note)
+    else:
+        print('unknown message', mesg)
 
 # Done, clean up and exit.
 stream.stop_stream()
