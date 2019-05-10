@@ -37,6 +37,8 @@ simultaneously.
   be supported, particularly pitch wheel, mod wheel, pan,
   volume, pedal and program change.
 
+* Note velocity and release velocity are not supported.
+
 * The keyboard currently auto-connects to "Mobile Keys 49
   MIDI 1". This should not be hardwired in software. Better
   would be to have the synth listen for a MIDI keyboard
@@ -49,6 +51,8 @@ simultaneously.
 * Add polyphony.
 
 * Add envelopes.
+
+* Use note on and off velocities.
 
 * Generalize to flowgraphs with more operators: maybe start
   with a DX7-ish setup.
