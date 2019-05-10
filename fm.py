@@ -1,4 +1,9 @@
 #!/usr/bin/python3
+# Copyright (c) 2019 Bart Massey
+# [This program is licensed under the "MIT License"]
+# Please see the file LICENSE in the source
+# distribution of this software for license terms.
+
 
 # MIDI FM synthesizer in Python.
 
@@ -74,7 +79,7 @@ while True:
     mesg = inport.receive()
     if mesg.type == 'note_on':
         keymap[mesg.note] = True
-        # XXX Exit synth when B6 and C6 are held together.
+        # XXX Exit synth when B5 and C5 are held together.
         if keymap[83] and keymap[84]:
             break
         print('key on', mesg.note)
