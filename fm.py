@@ -26,11 +26,8 @@ amod = float(sys.argv[2])
 # Sample rate.
 rate = 48000
 
-# Keymap contains currently-held keys.
-keymap = set()
-
-# Current tick in current waveform.
-t = 0
+# Keymap contains currently-held keys and their operators.
+keymap = dict()
 
 # Conversion factor for Hz to radians.
 hz_to_rads = 2 * math.pi / rate
@@ -39,33 +36,35 @@ hz_to_rads = 2 * math.pi / rate
 key_to_hz = [440 * 2**((key - 69) / 12)
              for key in range(128)]
 
-def op():
-    """FM operator. (Technically two operators.)"""
-    global t
+class Op(object):
+    """FM Operator"""
+    def __init__(self, key):
+        """Make a new operator for the given key."""
+        self.t = 0
+        self.key = key
+        self.wc = key_to_hz[key] * hz_to_rads
+        self.wm = qmod * self.wc
+
+    def sample(self):
+        """Get the next sample from this operator."""
+        m = amod * math.sin(self.wm * self.t)
+        result = math.sin(self.wc * (self.t + m))
+        self.t += 1
+        return result
+
+def operate():
+    """Accumulate a composite sample from the active operators."""
     # Sample to be output.
     s = 0
     keys = set(keymap)
     for key in keys:
-        # Set carrier frequency based on key.
-        fcarrier = key_to_hz[key]
-        # Carrier frequency in radians.
-        wc = fcarrier * hz_to_rads
-        # Mod frequency in radians.
-        wm = qmod * wc
-        # Next sample.
-        s += math.sin(wc * (t + amod * math.sin(wm * t)))
-    # Advance tick.
-    t += 1
+        s += keymap[key].sample()
     return 0.5 * s / max(len(keys), 1)
 
 def callback(in_data, frame_count, time_info, status):
     """Supply frames to PortAudio."""
-    # Zero tick on every silence.
-    if len(keymap) == 0:
-        global t
-        t = 0
     # Frames of waveform.
-    data = [int(32767.0 * op())
+    data = [int(32767.0 * operate())
             for _ in range(frame_count)]
     # Get the frames into the right format for PA.
     frames = bytes(array.array('h', data))
@@ -85,15 +84,17 @@ stream = pa.open(
 while True:
     mesg = inport.receive()
     if mesg.type == 'note_on':
-        print('note on', mesg.note)
-        keymap.add(mesg.note)
+        key = mesg.note
+        print('note on', key)
+        keymap[key] = Op(key)
         # XXX Exit synth when B5 and C5 are held together.
         if 83 in keymap and 84 in keymap:
             break
     elif mesg.type == 'note_off':
-        print('note off', mesg.note)
-        if mesg.note in keymap:
-            keymap.remove(mesg.note)
+        key = mesg.note
+        print('note off', key)
+        if key in keymap:
+            del keymap[key]
     else:
         print('unknown message', mesg)
 
