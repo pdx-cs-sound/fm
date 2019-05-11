@@ -83,6 +83,10 @@ class Op(object):
         self.t += 1
         return result
 
+def clamp(v, c):
+    """Clamp a value v to +- c."""
+    return min(max(v, -c), c)
+
 def operate():
     """Accumulate a composite sample from the active operators."""
     # Sample to be output.
@@ -96,12 +100,12 @@ def operate():
         else:
             s += sk
             playing += 1
-    return 0.8 * s / max(playing, 1)
+    return 0.1 * s
 
 def callback(in_data, frame_count, time_info, status):
     """Supply frames to PortAudio."""
     # Frames of waveform.
-    data = [int(32767.0 * operate())
+    data = [clamp(int(32767.0 * operate()), 32767)
             for _ in range(frame_count)]
     # Get the frames into the right format for PA.
     frames = bytes(array.array('h', data))

@@ -16,7 +16,7 @@ To run the program, say "`python3 fm.py` *qmod* *amod*"
 where *qmod* is the multiple of the key carrier frequency
 used for modulation frequency, and *amod* is the modulation
 amplitude. A reasonable starting value is "`python3 fm.py
-2.05 10`". To stop the program, press the B5 and C5 keys on
+12.05 30`". To stop the program, press the B5 and C5 keys on
 the musical keyboard (the topmost keys on a 49-key keyboard)
 simultaneously.
 
