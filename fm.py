@@ -130,10 +130,11 @@ while True:
         assert key not in keymap
         note = Op(key)
         keymap[key] = note
-        notemap.add(note)
-        # XXX Exit synth when B5 and C5 are held together.
-        if 83 in keymap and 84 in keymap:
+        # XXX Exit synth when B5 and C5 are held together
+        # and keyboard is near-silent.
+        if 83 in keymap and 84 in keymap and len(notemap) == 1:
             break
+        notemap.add(note)
     elif mesg.type == 'note_off':
         key = mesg.note
         print('note off', key)
