@@ -18,8 +18,8 @@ import array
 inport = mido.open_input('Mobile Keys 49 MIDI 1')
 assert inport != None
 
-# Multiplier to carrier frequency for mod frequency.
-qmod = float(sys.argv[1])
+# Addition to carrier pitch for mod pitch.
+kmod = float(sys.argv[1])
 # Amplitude of modulation.
 amod = float(sys.argv[2])
 
@@ -32,9 +32,16 @@ keymap = dict()
 # Conversion factor for Hz to radians.
 hz_to_rads = 2 * math.pi / rate
 
-# Conversion table for keys to Hz.
-key_to_hz = [440 * 2**((key - 69) / 12)
-             for key in range(128)]
+def note_to_freq(note):
+    """Convert a note (pitch) to its corresponding frequency.
+    Note 0 is A4 (440 Hz)."""
+    return hz_to_rads * 440 * 2**((note - 69) / 12)
+
+# Conversion table for keys to radian frequencies.
+key_to_freq = [note_to_freq(key) for key in range(128)]
+
+# Conversion table for keys to radian mod frequencies.
+key_to_mod_freq = [note_to_freq(key + kmod) for key in range(128)]
 
 class Op(object):
     """FM Operator"""
@@ -42,8 +49,8 @@ class Op(object):
         """Make a new operator for the given key."""
         self.t = 0
         self.key = key
-        self.wc = key_to_hz[key] * hz_to_rads
-        self.wm = qmod * self.wc
+        self.wc = key_to_freq[key]
+        self.wm = key_to_mod_freq[key]
 
     def sample(self):
         """Get the next sample from this operator."""
