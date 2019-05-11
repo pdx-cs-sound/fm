@@ -26,11 +26,22 @@ amod = float(sys.argv[2])
 # Sample rate.
 rate = 48000
 
-# Keymap contains currently-held keys and their operators.
+# Keymap contains currently-held notes for keys.
 keymap = dict()
+
+# Note map contains currently-playing operators.
+notemap = set()
 
 # Conversion factor for Hz to radians.
 hz_to_rads = 2 * math.pi / rate
+
+# Attack time in secs and samples for AR envelope.
+t_attack = 0.05
+s_attack = int(rate * t_attack)
+
+# Release time in secs and samples for AR envelope.
+t_release = 0.20
+s_release = int(rate * t_release)
 
 def note_to_freq(note):
     """Convert a note (pitch) to its corresponding frequency.
@@ -49,13 +60,26 @@ class Op(object):
         """Make a new operator for the given key."""
         self.t = 0
         self.key = key
+        self.release_time = None
         self.wc = key_to_freq[key]
         self.wm = key_to_mod_freq[key]
 
+    def off(self):
+        """Note is turned off. Start release."""
+        self.release_time = self.t
+
     def sample(self):
-        """Get the next sample from this operator."""
+        """Return the next sample from this operator. If the
+        note release is complete, instead return None."""
         m = amod * math.sin(self.wm * self.t)
         result = math.sin(self.wc * (self.t + m))
+        if self.release_time == None and self.t < s_attack:
+            result *= self.t / s_attack
+        if self.release_time != None:
+            t = self.t - self.release_time
+            if t >= s_release:
+                return None
+            result *= 1.0 - t / s_release
         self.t += 1
         return result
 
@@ -63,10 +87,16 @@ def operate():
     """Accumulate a composite sample from the active operators."""
     # Sample to be output.
     s = 0
-    keys = set(keymap)
-    for key in keys:
-        s += keymap[key].sample()
-    return 0.5 * s / max(len(keys), 1)
+    playing = 0
+    for note in set(notemap):
+        sk = note.sample()
+        if sk == None:
+            # Release is complete. Get rid of the note.
+            notemap.remove(note)
+        else:
+            s += sk
+            playing += 1
+    return 0.8 * s / max(playing, 1)
 
 def callback(in_data, frame_count, time_info, status):
     """Supply frames to PortAudio."""
@@ -93,7 +123,10 @@ while True:
     if mesg.type == 'note_on':
         key = mesg.note
         print('note on', key)
-        keymap[key] = Op(key)
+        assert key not in keymap
+        note = Op(key)
+        keymap[key] = note
+        notemap.add(note)
         # XXX Exit synth when B5 and C5 are held together.
         if 83 in keymap and 84 in keymap:
             break
@@ -101,6 +134,7 @@ while True:
         key = mesg.note
         print('note off', key)
         if key in keymap:
+            keymap[key].off()
             del keymap[key]
     else:
         print('unknown message', mesg)

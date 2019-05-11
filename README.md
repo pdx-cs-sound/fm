@@ -1,7 +1,7 @@
 # fm: FM MIDI synthesizer demo in Python
 Copyright (c) 2019 Bart Massey
 
-This little cross-platform polyphonic synthesizer (about 100
+This little cross-platform polyphonic synthesizer (about 150
 lines of Python) is driven by a MIDI keyboard and outputs to
 host native audio. It was built as a demo of FM synthesis
 and synthesizer construction.
@@ -23,11 +23,13 @@ simultaneously.
 ## Limitations
 
 * The FM synthesizer is a textbook 2-operator unit. More
-  general operators and flowgraphs are planned. The
-  modulation multiplier should scale with frequency.
+  general operators and flowgraphs are planned.
 
-* There is no envelope generator. There should be separate
-  per-operator ADSR envelope generators.
+* The envelope generator is currently a fixed linear
+  attack-release (AR) envelope. This should be extended to
+  full ADSR and made configurable. Seperate envelopes should
+  be able to be applied to separate operators where this
+  makes sense.
 
 * The modulation parameters (frequency and amplitude) can be
   set only from the command line. Other MIDI messages should
@@ -44,8 +46,6 @@ simultaneously.
 * JACK is not supported.
 
 ## Future Work
-
-* Add envelopes.
 
 * Use note on and off velocities.
 
