@@ -36,11 +36,11 @@ notemap = set()
 hz_to_rads = 2 * math.pi / rate
 
 # Attack time in secs and samples for AR envelope.
-t_attack = 0.05
+t_attack = 0.010
 s_attack = int(rate * t_attack)
 
 # Release time in secs and samples for AR envelope.
-t_release = 0.20
+t_release = 0.30
 s_release = int(rate * t_release)
 
 def note_to_freq(note):
@@ -68,18 +68,24 @@ class Op(object):
         """Note is turned off. Start release."""
         self.release_time = self.t
 
+    def envelope(self):
+        """Return the envelope for the given note at the given time.
+        Returns None when note should be dropped."""
+        t = self.t
+        if self.release_time != None:
+            rt = t - self.release_time
+            if rt >= s_release:
+                return None
+            return 1.0 - rt / s_release
+        if t < s_attack:
+            return t / s_attack
+        return 1.0
+
     def sample(self):
         """Return the next sample from this operator. If the
         note release is complete, instead return None."""
         m = amod * math.sin(self.wm * self.t)
         result = math.sin(self.wc * (self.t + m))
-        if self.release_time == None and self.t < s_attack:
-            result *= self.t / s_attack
-        if self.release_time != None:
-            t = self.t - self.release_time
-            if t >= s_release:
-                return None
-            result *= 1.0 - t / s_release
         self.t += 1
         return result
 
@@ -91,15 +97,13 @@ def operate():
     """Accumulate a composite sample from the active operators."""
     # Sample to be output.
     s = 0
-    playing = 0
     for note in set(notemap):
-        sk = note.sample()
-        if sk == None:
+        e = note.envelope()
+        if e == None:
             # Release is complete. Get rid of the note.
             notemap.remove(note)
-        else:
-            s += sk
-            playing += 1
+            continue
+        s += e * note.sample()
     return 0.1 * s
 
 def callback(in_data, frame_count, time_info, status):
