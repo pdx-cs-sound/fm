@@ -6,7 +6,8 @@ lines of Python) is driven by a MIDI keyboard and outputs to
 host native audio. It was built as a demo of FM synthesis
 and synthesizer construction.
 
-Here's a bit of what it sounds like: [fm-demo.wav](fm-demo.wav)
+Here's a bit of what it sounds like:
+[fm-demo.wav](https://raw.githubusercontent.com/pdx-cs-sound/fm/master/fm-demo.wav)
 
 ## Running
 
