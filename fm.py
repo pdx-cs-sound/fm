@@ -19,7 +19,7 @@ inport = mido.open_input('Mobile Keys 49 MIDI 1')
 assert inport != None
 
 # Addition to carrier pitch for mod pitch.
-kmod = float(sys.argv[1])
+fmod = float(sys.argv[1])
 # Amplitude of modulation.
 amod = float(sys.argv[2])
 
@@ -52,7 +52,7 @@ def note_to_freq(note):
 key_to_freq = [note_to_freq(key) for key in range(128)]
 
 # Conversion table for keys to radian mod frequencies.
-key_to_mod_freq = [note_to_freq(key + kmod) for key in range(128)]
+key_to_mod_freq = [key_to_freq[key] + fmod * hz_to_rads for key in range(128)]
 
 class Op(object):
     """FM Operator"""

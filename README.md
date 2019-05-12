@@ -12,13 +12,13 @@ Prerequisites for this program are Python 3, PyAudio, and
 Mido. Both `pyaudio` and `mido` can be installed using
 `pip3`.
 
-To run the program, say "`python3 fm.py` *qmod* *amod*"
-where *qmod* is the multiple of the key carrier frequency
-used for modulation frequency, and *amod* is the modulation
-amplitude. A reasonable starting value is "`python3 fm.py
-12.05 30`". To stop the program, press the B5 and C5 keys on
-the musical keyboard (the topmost keys on a 49-key keyboard)
-simultaneously.
+To run the program, say "`python3 fm.py` *fmod* *amod*"
+where *fmod* is the offset in Hz of the key carrier
+frequency used for modulation frequency, and *amod* is the
+modulation amplitude. A reasonable starting value is
+"`python3 fm.py 3 40`". To stop the program, press the B5
+and C5 keys on the musical keyboard (the topmost keys on a
+49-key keyboard) simultaneously.
 
 ## Limitations
 
