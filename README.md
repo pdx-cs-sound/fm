@@ -1,7 +1,7 @@
 # fm: FM MIDI synthesizer demo in Python
 Copyright (c) 2019 Bart Massey
 
-This little cross-platform polyphonic synthesizer (about 150
+This little cross-platform polyphonic synthesizer (about 200
 lines of Python) is driven by a MIDI keyboard and outputs to
 host native audio. It was built as a demo of FM synthesis
 and synthesizer construction.
