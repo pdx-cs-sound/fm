@@ -4,7 +4,6 @@
 # Please see the file LICENSE in the source
 # distribution of this software for license terms.
 
-
 # MIDI FM synthesizer in Python.
 
 import mido
@@ -14,8 +13,8 @@ import math
 import pyaudio
 import array
 
-# Connect to the keyboard. XXX Name hardwired for now.
-inport = mido.open_input('Mobile Keys 49 MIDI 1')
+# Open an input port.
+inport = mido.open_input('fm', virtual=True)
 assert inport != None
 
 # Addition to carrier pitch for mod pitch.
@@ -56,13 +55,24 @@ key_to_mod_freq = [key_to_freq[key] + fmod * hz_to_rads for key in range(128)]
 
 class Op(object):
     """FM Operator"""
+    def __init__(self, fcarrier, acarrier, fmod, amod):
+        """Make a new FM operator."""
+        self.wc = 2 * math.pi * fcarrier
+        self.ac = acarrier
+        self.wm = 2 * math.pi * fmod
+        self.am = amod
+
+    def sample(self, t):
+        """Return the next sample from this operator."""
+        m = self.am * math.sin(self.wm * t)
+        return self.ac * math.sin(self.wc * (t + m))
+
+class Key(object):
     def __init__(self, key):
-        """Make a new operator for the given key."""
         self.t = 0
         self.key = key
         self.release_time = None
-        self.wc = key_to_freq[key]
-        self.wm = key_to_mod_freq[key]
+        self.op = Op(key_to_freq[key], 1.0, key_to_mod_freq[key], amod)
 
     def off(self):
         """Note is turned off. Start release."""
@@ -82,12 +92,10 @@ class Op(object):
         return 1.0
 
     def sample(self):
-        """Return the next sample from this operator. If the
-        note release is complete, instead return None."""
-        m = amod * math.sin(self.wm * self.t)
-        result = math.sin(self.wc * (self.t + m))
+        """Return the next sample for this key."""
+        sample = self.op.sample(self.t)
         self.t += 1
-        return result
+        return sample
 
 def clamp(v, c):
     """Clamp a value v to +- c."""
@@ -132,7 +140,7 @@ while True:
         key = mesg.note
         print('note on', key)
         assert key not in keymap
-        note = Op(key)
+        note = Key(key)
         keymap[key] = note
         # XXX Exit synth when B5 and C5 are held together
         # and keyboard is near-silent.
