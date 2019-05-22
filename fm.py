@@ -145,17 +145,21 @@ while True:
         assert key not in keymap
         note = Key(key, velocity)
         keymap[key] = note
-        # XXX Exit synth when B5 and C5 are held together
-        # and keyboard is near-silent.
-        if 83 in keymap and 84 in keymap and len(notemap) == 1:
-            break
         notemap.add(note)
     elif mesg.type == 'note_off':
         key = mesg.note
+        velocity = (mesg.velocity + 23) / 150
         print('note off', key, round(velocity, 2))
         if key in keymap:
             keymap[key].off(velocity)
             del keymap[key]
+    elif (mesg.type == 'control_change') and (mesg.control == 123):
+        print('panic: exiting')
+        for key in set(keymap):
+            keymap[key].off(1.0)
+            del keymap[key]
+        notemap = set()
+        break
     else:
         print('unknown message', mesg)
 

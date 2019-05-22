@@ -23,11 +23,8 @@ modulation amplitude. A reasonable starting value is
 above).
 
 Note velocity modifies note volume; release modifies note
-release time.
-
-To stop the program, press the B5 and C5 keys on the
-musical keyboard (the topmost keys on a 49-key keyboard)
-simultaneously.
+release time. A MIDI "panic" control message will turn off
+the synthesizer and exit.
 
 ## Limitations
 
