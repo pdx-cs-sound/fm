@@ -39,7 +39,7 @@ t_attack = 0.010
 s_attack = int(rate * t_attack)
 
 # Release time in secs and samples for AR envelope.
-t_release = 0.30
+t_release = 0.10
 s_release = int(rate * t_release)
 
 def note_to_freq(note):
@@ -72,11 +72,13 @@ class Key(object):
         self.t = 0
         self.key = key
         self.release_time = None
+        self.release_length = None
         self.op = Op(key_to_freq[key], velocity, key_to_mod_freq[key], amod)
 
-    def off(self):
+    def off(self, velocity):
         """Note is turned off. Start release."""
         self.release_time = self.t
+        self.release_length = s_release / velocity
 
     def envelope(self):
         """Return the envelope for the given note at the given time.
@@ -84,9 +86,9 @@ class Key(object):
         t = self.t
         if self.release_time != None:
             rt = t - self.release_time
-            if rt >= s_release:
+            if rt >= self.release_length:
                 return None
-            return 1.0 - rt / s_release
+            return 1.0 - rt / self.release_length
         if t < s_attack:
             return t / s_attack
         return 1.0
@@ -150,9 +152,9 @@ while True:
         notemap.add(note)
     elif mesg.type == 'note_off':
         key = mesg.note
-        print('note off', key)
+        print('note off', key, round(velocity, 2))
         if key in keymap:
-            keymap[key].off()
+            keymap[key].off(velocity)
             del keymap[key]
     else:
         print('unknown message', mesg)

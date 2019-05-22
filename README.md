@@ -22,6 +22,9 @@ modulation amplitude. A reasonable starting value is
 "`python3 fm.py 3 40`" (which was used to produce the demo
 above).
 
+Note velocity modifies note volume; release modifies note
+release time.
+
 To stop the program, press the B5 and C5 keys on the
 musical keyboard (the topmost keys on a 49-key keyboard)
 simultaneously.
@@ -42,20 +45,17 @@ simultaneously.
   be supported, particularly pitch wheel, mod wheel, pan,
   volume, pedal and program change.
 
-* Release velocity is not supported.
-
-* The keyboard currently auto-connects to "Mobile Keys 49
-  MIDI 1". This should not be hardwired in software. Better
-  would be to have the synth listen for a MIDI keyboard
-  connection, behaving as a MIDI output device.
+* The keyboard currently tries to listen for a MIDI keyboard
+  connection, behaving as a MIDI output device. This may not
+  work on Windows or Mac. A keyboard can be hardwire to the
+  program, but uggh. A command line argument would be
+  better.
 
 * JACK is not supported.
 
 * One-channel (mono) output.
 
 ## Future Work
-
-* Use note on and off velocities.
 
 * Generalize to flowgraphs with more operators: maybe start
   with a DX7-ish setup.
