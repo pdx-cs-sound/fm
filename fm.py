@@ -45,21 +45,21 @@ s_release = int(rate * t_release)
 def note_to_freq(note):
     """Convert a note (pitch) to its corresponding frequency.
     Note 0 is A4 (440 Hz)."""
-    return hz_to_rads * 440 * 2**((note - 69) / 12)
+    return 440 * 2**((note - 69) / 12)
 
 # Conversion table for keys to radian frequencies.
 key_to_freq = [note_to_freq(key) for key in range(128)]
 
 # Conversion table for keys to radian mod frequencies.
-key_to_mod_freq = [key_to_freq[key] + fmod * hz_to_rads for key in range(128)]
+key_to_mod_freq = [key_to_freq[key] + fmod for key in range(128)]
 
 class Op(object):
     """FM Operator"""
     def __init__(self, fcarrier, acarrier, fmod, amod):
         """Make a new FM operator."""
-        self.wc = 2 * math.pi * fcarrier
+        self.wc = hz_to_rads * fcarrier
         self.ac = acarrier
-        self.wm = 2 * math.pi * fmod
+        self.wm = hz_to_rads * fmod
         self.am = amod
 
     def sample(self, t):
