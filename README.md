@@ -42,7 +42,7 @@ simultaneously.
   be supported, particularly pitch wheel, mod wheel, pan,
   volume, pedal and program change.
 
-* Note velocity and release velocity are not supported.
+* Release velocity is not supported.
 
 * The keyboard currently auto-connects to "Mobile Keys 49
   MIDI 1". This should not be hardwired in software. Better

@@ -68,11 +68,11 @@ class Op(object):
         return self.ac * math.sin(self.wc * (t + m))
 
 class Key(object):
-    def __init__(self, key):
+    def __init__(self, key, velocity):
         self.t = 0
         self.key = key
         self.release_time = None
-        self.op = Op(key_to_freq[key], 1.0, key_to_mod_freq[key], amod)
+        self.op = Op(key_to_freq[key], velocity, key_to_mod_freq[key], amod)
 
     def off(self):
         """Note is turned off. Start release."""
@@ -138,9 +138,10 @@ while True:
     mesg = inport.receive()
     if mesg.type == 'note_on':
         key = mesg.note
-        print('note on', key)
+        velocity = (mesg.velocity + 23) / 150
+        print('note on', key, round(velocity, 2))
         assert key not in keymap
-        note = Key(key)
+        note = Key(key, velocity)
         keymap[key] = note
         # XXX Exit synth when B5 and C5 are held together
         # and keyboard is near-silent.
