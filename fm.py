@@ -138,7 +138,10 @@ stream = pa.open(
 # Process key events and modify the PA play freq.
 while True:
     mesg = inport.receive()
-    if mesg.type == 'note_on':
+    mesg_type = mesg.type
+    if mesg_type == 'note_on' and mesg.velocity == 0:
+        mesg_type = 'note_off'
+    if mesg_type == 'note_on':
         key = mesg.note
         velocity = (mesg.velocity + 23) / 150
         print('note on', key, round(velocity, 2))
@@ -146,7 +149,7 @@ while True:
         note = Key(key, velocity)
         keymap[key] = note
         notemap.add(note)
-    elif mesg.type == 'note_off':
+    elif mesg_type == 'note_off':
         key = mesg.note
         velocity = (mesg.velocity + 23) / 150
         print('note off', key, round(velocity, 2))
