@@ -13,7 +13,8 @@ Here's a bit of what it sounds like:
 
 Prerequisites for this program are Python 3, PyAudio, and
 Mido. Both `pyaudio` and `mido` can be installed using
-`pip3`.
+`pip3`. Note that `mido` requires `python-rtmidi`: `rtmidi`
+won't work.
 
 To run the program, say "`python3 fm.py` *fmod* *amod*"
 where *fmod* is the offset in Hz of the key carrier
