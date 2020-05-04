@@ -163,6 +163,8 @@ while True:
             del keymap[key]
         notemap = set()
         break
+    elif (mesg.type == 'control_change') and (mesg.control == 10):
+        pass
     else:
         print('unknown message', mesg)
 
