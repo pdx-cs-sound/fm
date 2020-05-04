@@ -17,11 +17,6 @@ import array
 inport = mido.open_input('fm', virtual=True)
 assert inport != None
 
-# Addition to carrier pitch for mod pitch.
-fmod = float(sys.argv[1])
-# Amplitude of modulation.
-amod = float(sys.argv[2])
-
 # Sample rate.
 rate = 48000
 
@@ -50,22 +45,16 @@ def note_to_freq(key):
 # Conversion table for keys to radian frequencies.
 key_to_freq = [note_to_freq(key) for key in range(128)]
 
-# Conversion table for keys to radian mod frequencies.
-key_to_mod_freq = [key_to_freq[key] + fmod for key in range(128)]
-
-class Op(object):
-    """FM Operator"""
-    def __init__(self, fcarrier, acarrier, fmod, amod):
-        """Make a new FM operator."""
-        self.wc = hz_to_rads * fcarrier
-        self.ac = acarrier
-        self.wm = hz_to_rads * fmod
-        self.am = amod
+class Saw(object):
+    """Sawtooth generator"""
+    def __init__(self, f, a):
+        """Make a new sawtooth operator."""
+        self.tmod = rate / f
+        self.a = a
 
     def sample(self, t):
-        """Return the next sample from this operator."""
-        m = self.am * math.sin(self.wm * t)
-        return self.ac * math.sin(self.wc * (t + m))
+        """Return the next sample from this generator."""
+        return self.a * ((t % self.tmod) / self.tmod)
 
 class Key(object):
     def __init__(self, key, velocity):
@@ -73,7 +62,7 @@ class Key(object):
         self.key = key
         self.release_time = None
         self.release_length = None
-        self.op = Op(key_to_freq[key], velocity, key_to_mod_freq[key], amod)
+        self.op = Saw(key_to_freq[key], velocity)
 
     def off(self, velocity):
         """Note is turned off. Start release."""
