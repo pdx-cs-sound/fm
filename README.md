@@ -1,12 +1,14 @@
-# fm: FM MIDI synthesizer demo in Python
+# fm: Fun MIDI synthesizer demo in Python
 Copyright (c) 2019 Bart Massey
 
-This little cross-platform polyphonic synthesizer (about 200
-lines of Python) is driven by a MIDI keyboard and outputs to
-host native audio. It was built as a demo of FM synthesis
-and synthesizer construction.
+This little cross-platform polyphonic synthesizer (a few
+hundred lines of Python) is driven by a MIDI keyboard and
+outputs to host native audio. It was built as a demo of FM
+synthesis and synthesizer construction, but now includes
+more general additive synth functions.
 
-Here's a bit of what it sounds like:
+Here's a bit of what it sounds like as an FM synth
+out-of-the-box:
 [fm-demo.wav](https://raw.githubusercontent.com/pdx-cs-sound/fm/master/fm-demo.wav)
 
 ## Running
@@ -16,12 +18,7 @@ Mido. Both `pyaudio` and `mido` can be installed using
 `pip3`. Note that `mido` requires `python-rtmidi`: `rtmidi`
 won't work.
 
-To run the program, say "`python3 fm.py` *fmod* *amod*"
-where *fmod* is the offset in Hz of the key carrier
-frequency used for modulation frequency, and *amod* is the
-modulation amplitude. A reasonable starting value is
-"`python3 fm.py 3 40`" (which was used to produce the demo
-above).
+To run the program, say `python3 fm.py`.
 
 Note velocity modifies note volume; release modifies note
 release time. A MIDI "panic" control message will turn off
@@ -29,8 +26,8 @@ the synthesizer and exit.
 
 ## Limitations
 
-* The FM synthesizer is a textbook 2-operator unit. More
-  general operators and flowgraphs are planned.
+* There is currently no flowgraph, which severely limits
+  what can be done without modifying the source code.
 
 * The envelope generator is currently a fixed linear
   attack-release (AR) envelope. This should be extended to
@@ -38,16 +35,15 @@ the synthesizer and exit.
   be able to be applied to separate operators where this
   makes sense.
 
-* The modulation parameters (frequency and amplitude) can be
-  set only from the command line. Other MIDI messages should
-  be supported, particularly pitch wheel, mod wheel, pan,
+* FM and its frequency and amplitude can be set only by
+  editing the source. Other MIDI messages should be
+  supported, particularly pitch wheel, mod wheel, pan,
   volume, pedal and program change.
 
 * The keyboard currently tries to listen for a MIDI keyboard
   connection, behaving as a MIDI output device. This may not
-  work on Windows or Mac. A keyboard can be hardwire to the
-  program, but uggh. A command line argument would be
-  better.
+  work on Windows or Mac. An optional command line argument
+  to specify a synth would be useful.
 
 * JACK is not supported.
 
@@ -55,8 +51,9 @@ the synthesizer and exit.
 
 ## Future Work
 
-* Generalize to flowgraphs with more operators: maybe start
-  with a DX7-ish setup.
+* Add proper argument parsing.
+
+* Implement flowgraph setup.
 
 * Add better user controls.
 

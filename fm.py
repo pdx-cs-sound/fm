@@ -4,7 +4,7 @@
 # Please see the file LICENSE in the source
 # distribution of this software for license terms.
 
-# MIDI FM synthesizer in Python.
+# MIDI synthesizer in Python.
 
 import mido
 import sys
@@ -23,11 +23,8 @@ rate = 48000
 # Keymap contains currently-held notes for keys.
 keymap = dict()
 
-# Note map contains currently-playing operators.
+# Note map contains currently-playing notes.
 notemap = set()
-
-# Conversion factor for Hz to radians.
-hz_to_rads = 2 * math.pi / rate
 
 # Attack time in secs and samples for AR envelope.
 t_attack = 0.010
@@ -37,32 +34,64 @@ s_attack = int(rate * t_attack)
 t_release = 0.10
 s_release = int(rate * t_release)
 
-def note_to_freq(key):
-    """Convert a key number to its corresponding frequency.
-    Key 69 is A4 (440 Hz)."""
-    return 440 * 2**((key - 69) / 12)
-
 # Conversion table for keys to radian frequencies.
-key_to_freq = [note_to_freq(key) for key in range(128)]
+# Key 69 is A4 (440 Hz).
+key_to_freq = [440 * 2**((key - 69) / 12) for key in range(128)]
 
 class Saw(object):
-    """Sawtooth generator"""
-    def __init__(self, f, a):
-        """Make a new sawtooth operator."""
+    """Sawtooth VCO."""
+    def __init__(self, f):
+        """Make a new sawtooth generator."""
         self.tmod = rate / f
-        self.a = a
 
-    def sample(self, t):
+    def sample(self, t, tv = 0.0):
         """Return the next sample from this generator."""
-        return self.a * ((t % self.tmod) / self.tmod)
+        return 2.0 * (((t + tv + self.tmod) % self.tmod) / self.tmod) - 1.0
+
+class Sine(object):
+    """Sine VCO."""
+    def __init__(self, f):
+        """Make a new sine generator."""
+        self.period = 2 * math.pi * f / rate
+
+    def sample(self, t, tv = 0.0):
+        """Return the next sample from this generator."""
+        return math.sin((t + tv) * self.period)
+
+class FM(object):
+    """Sine VCO."""
+    def __init__(self, f, fmod = 3.0, amod = 40.0):
+        """Make a new FM generator."""
+        self.sine = Sine(f)
+        # XXX It turns out to sound better to have the
+        # modulation frequency adapt to the note frequency.
+        self.lfo = Sine(f + fmod)
+        self.amod = 40.0
+
+    def sample(self, t, tv = 0.0):
+        """Return the next sample from this generator."""
+        tmod = self.amod * self.lfo.sample(t, tv=tv)
+        return self.sine.sample(t, tv=tmod)
+
+class Square(object):
+    """Square VCO."""
+    def __init__(self, f):
+        """Make a new square generator."""
+        self.tmod = rate / f
+        self.half = self.tmod / 2.0
+
+    def sample(self, t, tv = 0.0):
+        """Return the next sample from this generator."""
+        return 2.0 * int(((t + tv + self.tmod) % self.tmod) > self.half) - 1.0
 
 class Key(object):
-    def __init__(self, key, velocity):
+    def __init__(self, key, velocity, gen):
         self.t = 0
         self.key = key
+        self.velocity = velocity
         self.release_time = None
         self.release_length = None
-        self.op = Saw(key_to_freq[key], velocity)
+        self.gen = gen(key_to_freq[key])
 
     def off(self, velocity):
         """Note is turned off. Start release."""
@@ -84,16 +113,16 @@ class Key(object):
 
     def sample(self):
         """Return the next sample for this key."""
-        sample = self.op.sample(self.t)
+        sample = self.gen.sample(self.t)
         self.t += 1
-        return sample
+        return self.velocity * sample
 
 def clamp(v, c):
     """Clamp a value v to +- c."""
     return min(max(v, -c), c)
 
-def operate():
-    """Accumulate a composite sample from the active operators."""
+def mix():
+    """Accumulate a composite sample from the active generators."""
     # Sample to be output.
     s = 0
     for note in set(notemap):
@@ -108,7 +137,7 @@ def operate():
 def callback(in_data, frame_count, time_info, status):
     """Supply frames to PortAudio."""
     # Frames of waveform.
-    data = [clamp(int(32767.0 * operate()), 32767)
+    data = [clamp(int(32767.0 * mix()), 32767)
             for _ in range(frame_count)]
     # Get the frames into the right format for PA.
     frames = bytes(array.array('h', data))
@@ -133,20 +162,20 @@ while True:
     if mesg_type == 'note_on':
         key = mesg.note
         velocity = (mesg.velocity + 23) / 150
-        print('note on', key, round(velocity, 2))
+        print('note on', key, mesg.velocity, round(velocity, 2))
         assert key not in keymap
-        note = Key(key, velocity)
+        note = Key(key, velocity, FM)
         keymap[key] = note
         notemap.add(note)
     elif mesg_type == 'note_off':
         key = mesg.note
         velocity = (mesg.velocity + 23) / 150
-        print('note off', key, round(velocity, 2))
+        print('note off', key, mesg.velocity, round(velocity, 2))
         if key in keymap:
             keymap[key].off(velocity)
             del keymap[key]
-    elif (mesg.type == 'control_change') and (mesg.control == 123):
-        print('panic: exiting')
+    elif (mesg.type == 'control_change') and (mesg.control == 23):
+        print('exiting')
         for key in set(keymap):
             keymap[key].off(1.0)
             del keymap[key]
