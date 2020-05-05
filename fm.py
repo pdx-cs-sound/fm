@@ -6,15 +6,21 @@
 
 # MIDI synthesizer in Python.
 
-import mido
-import sys
-import numpy as np
-import math
-import pyaudio
-import array
+import argparse, array, math, mido, pyaudio, sys
+
+ap = argparse.ArgumentParser()
+ap.add_argument(
+    "-k", "--keyboard",
+    help="Connect to given keyboard.",
+    type=str,
+)
+args = ap.parse_args()
 
 # Open an input port.
-inport = mido.open_input('fm', virtual=True)
+if args.keyboard is None:
+    inport = mido.open_input('fm', virtual=True)
+else:
+    inport = mido.open_input(args.keyboard)
 assert inport != None
 
 # Sample rate.

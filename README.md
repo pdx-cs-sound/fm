@@ -18,7 +18,9 @@ Mido. Both `pyaudio` and `mido` can be installed using
 `pip3`. Note that `mido` requires `python-rtmidi`: `rtmidi`
 won't work.
 
-To run the program, say `python3 fm.py`.
+To run the program, say `python3 fm.py`. If you want to
+connect to a named keyboard (found by `aconnect -o` on
+Linux) say `python3 fm.py -k` _keyboard_.
 
 Note velocity modifies note volume; release modifies note
 release time. A MIDI "panic" control message will turn off
@@ -40,18 +42,16 @@ the synthesizer and exit.
   supported, particularly pitch wheel, mod wheel, pan,
   volume, pedal and program change.
 
-* The keyboard currently tries to listen for a MIDI keyboard
-  connection, behaving as a MIDI output device. This may not
-  work on Windows or Mac. An optional command line argument
-  to specify a synth would be useful.
+* The keyboard by default currently tries to listen for a
+  MIDI keyboard connection, behaving as a MIDI output
+  device. This may not work on Windows or Mac. An optional
+  command line argument can override this, though.
 
 * JACK is not supported.
 
 * One-channel (mono) output.
 
 ## Future Work
-
-* Add proper argument parsing.
 
 * Implement flowgraph setup.
 
