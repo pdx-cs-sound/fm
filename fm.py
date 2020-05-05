@@ -6,7 +6,7 @@
 
 # MIDI synthesizer in Python.
 
-import argparse, array, math, mido, pyaudio, sys
+import argparse, array, math, mido, pyaudio, toml, sys
 
 ap = argparse.ArgumentParser()
 ap.add_argument(
@@ -14,13 +14,39 @@ ap.add_argument(
     help="Connect to given keyboard.",
     type=str,
 )
+ap.add_argument(
+    "-K", "--kbmap",
+    help="Use given JSON keyboard map file.",
+    type=str,
+)
 args = ap.parse_args()
 
+# Parse a keyboard map if given.
+button_stop = None
+keyboard_name = None
+control_suppressed = set()
+if args.kbmap is not None:
+    try:
+        kbmap = toml.load(args.kbmap)
+    except Exception as e:
+        print("cannot load kbmap", e, file=sys.stderr)
+        exit(1)
+    if "name" in kbmap:
+        keyboard_name = kbmap["name"]
+    if "stop" in kbmap:
+        button_stop = kbmap["stop"]
+    if "suppressed" in kbmap:
+        control_suppressed = set(kbmap["suppressed"])
+
+# Use a keyboard name if given.
+if args.keyboard is not None:
+    keyboard_name = args.keyboard
+
 # Open an input port.
-if args.keyboard is None:
+if keyboard_name is None:
     inport = mido.open_input('fm', virtual=True)
 else:
-    inport = mido.open_input(args.keyboard)
+    inport = mido.open_input(keyboard_name)
 assert inport != None
 
 # Sample rate.
@@ -37,7 +63,7 @@ t_attack = 0.010
 s_attack = int(rate * t_attack)
 
 # Release time in secs and samples for AR envelope.
-t_release = 0.10
+t_release = 0.01
 s_release = int(rate * t_release)
 
 # Conversion table for keys to radian frequencies.
@@ -102,7 +128,9 @@ class Key(object):
     def off(self, velocity):
         """Note is turned off. Start release."""
         self.release_time = self.t
-        self.release_length = s_release / velocity
+        if velocity == 0.0:
+            velocity = 1.0
+        self.release_length = s_release * (1.05 - velocity)
 
     def envelope(self):
         """Return the envelope for the given note at the given time.
@@ -167,7 +195,7 @@ while True:
         mesg_type = 'note_off'
     if mesg_type == 'note_on':
         key = mesg.note
-        velocity = (mesg.velocity + 23) / 150
+        velocity = mesg.velocity / 127
         print('note on', key, mesg.velocity, round(velocity, 2))
         assert key not in keymap
         note = Key(key, velocity, FM)
@@ -175,19 +203,20 @@ while True:
         notemap.add(note)
     elif mesg_type == 'note_off':
         key = mesg.note
-        velocity = (mesg.velocity + 23) / 150
+        velocity = mesg.velocity / 127
         print('note off', key, mesg.velocity, round(velocity, 2))
         if key in keymap:
             keymap[key].off(velocity)
             del keymap[key]
-    elif (mesg.type == 'control_change') and (mesg.control == 23):
+    elif (mesg.type == 'control_change') and (mesg.control == button_stop):
         print('exiting')
         for key in set(keymap):
             keymap[key].off(1.0)
             del keymap[key]
         notemap = set()
         break
-    elif (mesg.type == 'control_change') and (mesg.control == 10):
+    elif (mesg.type == 'control_change') and \
+         (mesg.control in control_suppressed):
         pass
     else:
         print('unknown message', mesg)

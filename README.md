@@ -13,18 +13,22 @@ out-of-the-box:
 
 ## Running
 
-Prerequisites for this program are Python 3, PyAudio, and
-Mido. Both `pyaudio` and `mido` can be installed using
-`pip3`. Note that `mido` requires `python-rtmidi`: `rtmidi`
-won't work.
+Prerequisites for this program are Python 3, PyAudio, Mido
+and TOML. `pyaudio` and `mido` and `toml` can be installed
+using `pip3`. Note that `mido` requires `python-rtmidi`:
+`rtmidi` won't work.
 
 To run the program, say `python3 fm.py`. If you want to
 connect to a named keyboard (found by `aconnect -o` on
-Linux) say `python3 fm.py -k` _keyboard_.
+Linux) say `python3 fm.py -k` _keyboard_. If you want to use
+a [TOML](https://en.wikipedia.org/wiki/TOML) keyboard
+configuration file say `python3 fm.py -K` _conffile_. An
+example keyboard configuration is provided for the M-Audio
+Oxygen 8 in `oxygen8.toml`.
 
-Note velocity modifies note volume; release modifies note
-release time. A MIDI "panic" control message will turn off
-the synthesizer and exit.
+Note velocity modifies note volume; release velocity
+modifies note release time. A MIDI "panic" control message
+will turn off the synthesizer and exit.
 
 ## Limitations
 
