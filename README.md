@@ -65,6 +65,13 @@ will turn off the synthesizer and exit.
 
 * Add stereo.
 
+## Notes
+
+The choice of TOML is as a least-common-denominator config
+file that is actually usable. Here's a nice explanation of
+why I
+[didn't choose JSON](https://www.lucidchart.com/techblog/2018/07/16/why-json-isnt-a-good-configuration-language/).
+
 ## License
 
 This program is licensed under the "MIT License".  Please
