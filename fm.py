@@ -117,6 +117,7 @@ class Square(object):
         return 2.0 * int(((t + tv + self.tmod) % self.tmod) > self.half) - 1.0
 
 class Key(object):
+    """Key processor."""
     def __init__(self, key, velocity, gen):
         self.t = 0
         self.key = key
