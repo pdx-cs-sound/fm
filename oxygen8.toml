@@ -1,18 +1,19 @@
 # TOML file for keyboard configuration.
-# This is for the M-AUDIO Oxygen 8 on
-# MIDI port 1.
+#
+# This is for the M-AUDIO Oxygen 8 v2 on MIDI port 1, with
+# the control values after factory reset (power on while
+# holding + and -). I recommend velocity curve 5 rather than
+# the default: see the manual.
 
 # MIDI keyboard port name: can be overridden on command
 # line.
 name = "USB Oxygen 8 v2 MIDI 1"
 
-# Button that will stop the synthesizer immediately
-# and exit when pressed.
+# Button that will stop the synthesizer immediately and exit
+# when pressed. Mapped to media stop key (square).
 stop = 23
 
 # List of control messages that should be suppressed /
-# ignored.  (My Oxygen 8 sends 10 at irregular intervals. I
-# don't know why. The Mod Wheel is labeled C10 on the device
-# silk, but actually appears to be connected to C1 as it
-# should be.)
-suppressed = [10]
+# ignored. My controller was sending spurious messages for a
+# while, but seems to be better now.
+# suppressed = []
