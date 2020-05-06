@@ -30,40 +30,33 @@ Note velocity modifies note volume; release velocity
 modifies note release time. A MIDI "panic" control message
 will turn off the synthesizer and exit.
 
-## Limitations
+## Status
 
-* There is currently no flowgraph, which severely limits
-  what can be done without modifying the source code.
-
-* The envelope generator is currently a fixed linear
-  attack-release (AR) envelope. This should be extended to
-  full ADSR and made configurable. Seperate envelopes should
-  be able to be applied to separate operators where this
-  makes sense.
-
-* FM and its frequency and amplitude can be set only by
-  editing the source. Other MIDI messages should be
-  supported, particularly pitch wheel, mod wheel, pan,
-  volume, pedal and program change.
-
-* The keyboard by default currently tries to listen for a
+* [x] The keyboard by default currently tries to listen for a
   MIDI keyboard connection, behaving as a MIDI output
-  device. This may not work on Windows or Mac. An optional
-  command line argument can override this, though.
+  device. This may not work on Windows or Mac. Add a config
+  file to use a particular keyboard and its controllers.
 
-* JACK is not supported.
+* [x] Add volume knob support.
 
-* One-channel (mono) output.
+* [ ] FM frequency and amplitude can be set only by editing
+  the source. Other MIDI messages should be supported,
+  particularly pitch wheel, mod wheel, sustain pedal. In
+  short, full MIDI controls.
 
-## Future Work
+* [ ] Extend the fixed linear attack-release (AR) envelope,
+  to full ADSR and make configurable. Seperate envelopes
+  should be able to be applied to separate operators where
+  this makes sense.
 
-* Implement flowgraph setup.
+* [ ] Add a VCF.
 
-* Add better user controls.
+* [ ] Add a flowgraph for general configuration, with
+  its own config file.
 
-* Read synth config from a file at startup.
+* [ ] Support JACK MIDI (?).
 
-* Add stereo.
+* [ ] Stereo.
 
 ## Notes
 
