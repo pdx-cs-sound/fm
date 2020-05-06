@@ -240,7 +240,7 @@ while True:
             notemap = set()
             break
         elif mesg.control == knob_volume:
-            volume = math.log2(1.0 + mesg.value / 127.0)
+            volume = 2.0 ** (mesg.value / 127.0) - 1.0
             print(f'volume change: {volume}')
         elif mesg.control in control_suppressed:
             pass
