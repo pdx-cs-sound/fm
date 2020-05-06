@@ -9,11 +9,14 @@
 # line.
 name = "USB Oxygen 8 v2 MIDI 1"
 
-# Button that will stop the synthesizer immediately and exit
-# when pressed. Mapped to media stop key (square).
-stop = 23
-
 # List of control messages that should be suppressed /
 # ignored. My controller was sending spurious messages for a
 # while, but seems to be better now.
 # suppressed = []
+
+[controls]
+# Button that will stop the synthesizer immediately and exit
+# when pressed. Mapped to media stop key (square).
+stop = 23
+# Volume knob.
+volume = 71

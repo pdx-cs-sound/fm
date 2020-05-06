@@ -21,8 +21,13 @@ ap.add_argument(
 )
 args = ap.parse_args()
 
+# Parameters
+volume = 0.5
+compression = 5
+
 # Parse a keyboard map if given.
 button_stop = None
+knob_volume = None
 keyboard_name = None
 control_suppressed = set()
 if args.kbmap is not None:
@@ -33,10 +38,14 @@ if args.kbmap is not None:
         exit(1)
     if "name" in kbmap:
         keyboard_name = kbmap["name"]
-    if "stop" in kbmap:
-        button_stop = kbmap["stop"]
     if "suppressed" in kbmap:
         control_suppressed = set(kbmap["suppressed"])
+    if "controls" in kbmap:
+        controls = kbmap["controls"]
+        if "stop" in controls:
+            button_stop = controls["stop"]
+        if "volume" in controls:
+            knob_volume = controls["volume"]
 
 # Use a keyboard name if given.
 if args.keyboard is not None:
@@ -156,10 +165,16 @@ def clamp(v, c):
     """Clamp a value v to +- c."""
     return min(max(v, -c), c)
 
+# Current tracked volume.
+volume_state = volume
+
 def mix():
     """Accumulate a composite sample from the active generators."""
-    # Sample to be output.
+    global volume_state
+    # Sample value to be output.
     s = 0
+    # Number of samples output.
+    n = 0
     for note in set(notemap):
         e = note.envelope()
         if e == None:
@@ -167,7 +182,14 @@ def mix():
             notemap.remove(note)
             continue
         s += e * note.sample()
-    return 0.1 * s
+        n += 1
+    if n == 0:
+        return 0
+    volume_state = 0.01 * volume + 0.99 * volume_state
+    gain = volume_state
+    if n > compression:
+        gain = volume_state * compression / n
+    return (1 / compression) * gain * s
 
 def callback(in_data, frame_count, time_info, status):
     """Supply frames to PortAudio."""
@@ -209,16 +231,21 @@ while True:
         if key in keymap:
             keymap[key].off(velocity)
             del keymap[key]
-    elif (mesg.type == 'control_change') and (mesg.control == button_stop):
-        print('exiting')
-        for key in set(keymap):
-            keymap[key].off(1.0)
-            del keymap[key]
-        notemap = set()
-        break
-    elif (mesg.type == 'control_change') and \
-         (mesg.control in control_suppressed):
-        pass
+    elif mesg.type == 'control_change':
+        if mesg.control == button_stop:
+            print('exiting')
+            for key in set(keymap):
+                keymap[key].off(1.0)
+                del keymap[key]
+            notemap = set()
+            break
+        elif mesg.control == knob_volume:
+            volume = math.log2(1.0 + mesg.value / 127.0)
+            print(f'volume change: {volume}')
+        elif mesg.control in control_suppressed:
+            pass
+        else:
+            print(f'unknown control {mesg.control}')
     else:
         print('unknown message', mesg)
 
