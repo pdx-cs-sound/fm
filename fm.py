@@ -54,6 +54,7 @@ sample_clock = 0
 
 # Parse a TOML keyboard map if given.
 button_stop = None
+control_stop = None
 knob_volume = None
 keyboard_name = None
 control_suppressed = set()
@@ -84,16 +85,32 @@ if keyboard_name is None:
     # Accept pending ALSA (or whatever) MIDI connection.
     inport = mido.open_input('fm', virtual=True)
 else:
-    # Open the named MIDI keyboard.
-    inport = mido.open_input(keyboard_name)
+    # Open the named MIDI keyboard. XXX Linux kludge to find
+    # the keyboard on whatever midi port it is on. Don't
+    # know how Windows or Mac will handle this.
+    ports = [""] + [f" MIDI {i}" for i in range (1, 9)]
+    found = False
+    for port in ports:
+        try:
+            inport = mido.open_input(f"{keyboard_name}{port}")
+            found = True
+            break
+        except IOError as e:
+            pass
+    if not found:
+        print(f"cannot find keyboard {keyboard_name}", file=sys.stderr)
+        exit(1)
+    
 assert inport != None
 
 class Knob(object):
     """Knob-controlled parameter."""
-    def __init__(self, scaling="log", initial=63):
+    def __init__(self, name, scaling="log", initial=63):
         """New knobbed parameter with given scaling ("log" or
         "linear") and initial control value.
         """
+        self.knob_name = name
+        # Knob scaling.
         if scaling == "log":
             # "log" scaling is actually exponential, to
             # compensate for log response.
@@ -125,13 +142,29 @@ class Knob(object):
         self.t = t
         return self.ivalue
 
+    def name(self):
+        """Canonical name of knob."""
+        return self.knob_name
+
 # Index of controls by MIDI control message code.
 controls = dict()
 
 # Set up the volume control.
-control_volume = Knob()
+control_volume = Knob("volume")
 if knob_volume is not None:
     controls[knob_volume] = control_volume
+
+# Set up the stop control if needed. XXX This is a kludge to
+# make a knob turned to zero exit the synth.
+if type(button_stop) == str:
+    found = False
+    for k, c in controls.items():
+        if c.name() == button_stop:
+            found = True
+            control_stop = k
+            break
+    if not found:
+        raise Exception(f"unknown stop control {button_stop}")
 
 # Keymap contains currently-held notes for keys.
 keymap = dict()
@@ -301,13 +334,12 @@ while True:
             del keymap[key]
     elif mesg.type == 'control_change':
         if mesg.control == button_stop:
-            print('exiting')
-            for key in set(keymap):
-                keymap[key].off(1.0)
-                del keymap[key]
-            notemap = set()
             break
         elif mesg.control in controls:
+            # XXX Kludge to stop the synth when a knob is
+            # turned to zero.
+            if mesg.control == control_stop and mesg.value == 0:
+                break
             controls[mesg.control].set(mesg.value)
         elif mesg.control in control_suppressed:
             pass
@@ -317,5 +349,10 @@ while True:
         print('unknown message', mesg)
 
 # Done, clean up and exit.
+print('exiting')
+for key in set(keymap):
+    keymap[key].off(1.0)
+    del keymap[key]
+notemap = set()
 stream.stop_stream()
 stream.close()

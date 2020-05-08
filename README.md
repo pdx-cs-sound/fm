@@ -22,9 +22,9 @@ To run the program, say `python3 fm.py`. If you want to
 connect to a named keyboard (found by `aconnect -o` on
 Linux) say `python3 fm.py -k` _keyboard_. If you want to use
 a [TOML](https://en.wikipedia.org/wiki/TOML) keyboard
-configuration file say `python3 fm.py -K` _conffile_. An
-example keyboard configuration is provided for the M-Audio
-Oxygen 8 in `oxygen8.toml`.
+configuration file say `python3 fm.py -K` _conffile_.
+Example keyboard configurations are provided for the M-Audio
+Oxygen 8 and Line 6 Mobile Keys 49.
 
 Note velocity modifies note volume; release velocity
 modifies note release time. A MIDI "panic" control message

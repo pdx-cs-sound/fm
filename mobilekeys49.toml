@@ -1,0 +1,19 @@
+# TOML file for keyboard configuration.
+#
+# This is for the Line 6 Mobile Keys 49.
+
+# MIDI keyboard name: can be overridden on command line.
+name = "Mobile Keys 49"
+
+# List of control messages that should be suppressed /
+# ignored.
+# suppressed = []
+
+[controls]
+# Volume knob.
+volume = 7
+# Stop the synthesizer immediately and exit when the volume
+# is turned to zero. Not optimal, but there's really no
+# obvious off control for this keyboard. XXX This must come
+# after the volume knob definition to work.
+stop = "volume"
