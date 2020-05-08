@@ -54,6 +54,9 @@ will turn off the synthesizer and exit.
 * [ ] Add a flowgraph for general configuration, with
   its own config file.
 
+* [ ] Better multiple simultaneous controller support via
+  MIDI channels.
+
 * [ ] Support JACK MIDI (?).
 
 * [ ] Stereo.
