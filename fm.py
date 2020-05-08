@@ -6,6 +6,13 @@
 
 # MIDI synthesizer in Python.
 
+# Sample rate.
+rate = 48000
+
+# Number of voices to play before compressing output volume
+# to inhibit clipping.
+compression = 5
+
 # Sample Processing Strategy
 #
 # This code contains a set of note objects called `notemap`,
@@ -41,13 +48,9 @@ ap.add_argument(
 )
 args = ap.parse_args()
 
-# Parameters
-# 
-# Current master volume in linear units.
-volume = 0.5
-# Number of voices to play before compressing output volume
-# to inhibit clipping.
-compression = 5
+# Global sample clock, indicating the number of samples
+# played since synthesizer start (excluding underruns).
+sample_clock = 0
 
 # Parse a TOML keyboard map if given.
 button_stop = None
@@ -85,8 +88,50 @@ else:
     inport = mido.open_input(keyboard_name)
 assert inport != None
 
-# Sample rate.
-rate = 48000
+class Knob(object):
+    """Knob-controlled parameter."""
+    def __init__(self, scaling="log", initial=63):
+        """New knobbed parameter with given scaling ("log" or
+        "linear") and initial control value.
+        """
+        if scaling == "log":
+            # "log" scaling is actually exponential, to
+            # compensate for log response.
+            self.scaler = lambda v: 2.0 ** (v / 127.0) - 1.0
+        elif scaling == "linear":
+            self.scaler = lambda v: v / 127.0
+        else:
+            raise Exception(f"unknown knob scaling {scaling}")
+        # Target control value.
+        self.cvalue = self.scaler(initial)
+        # Current interpolation between previous and target
+        # control value.
+        self.ivalue = self.cvalue
+        # Interpolation time constant (per second).
+        self.irate = 1.0 / (0.005 * rate)
+        # Current time.
+        self.t = sample_clock
+
+    def set(self, cvalue):
+        """Set new knob target value at current time."""
+        self.cvalue = self.scaler(cvalue)
+        self.t = sample_clock
+
+    def value(self, t):
+        """Update and return knob interpolated value at time t."""
+        ds = (t - self.t) * self.irate
+        assert ds >= 0
+        self.ivalue = self.cvalue * ds + self.ivalue * (1.0 - ds)
+        self.t = t
+        return self.ivalue
+
+# Index of controls by MIDI control message code.
+controls = dict()
+
+# Set up the volume control.
+control_volume = Knob()
+if knob_volume is not None:
+    controls[knob_volume] = control_volume
 
 # Keymap contains currently-held notes for keys.
 keymap = dict()
@@ -193,15 +238,10 @@ def clamp(v, c):
     """Clamp a value v to +- c."""
     return min(max(v, -c), c)
 
-# Current tracked volume.
-volume_state = volume
-
-def mix():
+def mix(t):
     """Accumulate a composite sample from the active generators."""
-    global volume_state
-    # Sample value to be output.
+    # Gather samples and count notes.
     s = 0
-    # Number of samples output.
     n = 0
     for note in set(notemap):
         e = note.envelope()
@@ -211,19 +251,19 @@ def mix():
             continue
         s += e * note.sample()
         n += 1
+
+    # Do gain adjustments based on number of playing notes.
     if n == 0:
         return 0
-    volume_state = 0.01 * volume + 0.99 * volume_state
-    gain = volume_state
-    if n > compression:
-        gain = volume_state * compression / n
-    return (1 / compression) * gain * s
+    return control_volume.value(t) * s / max(n, compression)
 
 def callback(in_data, frame_count, time_info, status):
     """Supply frames to PortAudio."""
-    # Frames of waveform.
-    data = [clamp(int(32767.0 * mix()), 32767)
-            for _ in range(frame_count)]
+    # Get frames of waveform.
+    global sample_clock
+    data = [ clamp(int(32767.0 * mix(sample_clock + i)), 32767)
+             for i in range(frame_count) ]
+    sample_clock += frame_count
     # Get the frames into the right format for PA.
     frames = bytes(array.array('h', data))
     # Return frames and continue signal.
@@ -267,9 +307,8 @@ while True:
                 del keymap[key]
             notemap = set()
             break
-        elif mesg.control == knob_volume:
-            volume = 2.0 ** (mesg.value / 127.0) - 1.0
-            print(f'volume change: {volume}')
+        elif mesg.control in controls:
+            controls[mesg.control].set(mesg.value)
         elif mesg.control in control_suppressed:
             pass
         else:

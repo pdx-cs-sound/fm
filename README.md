@@ -65,6 +65,12 @@ file that is actually usable. Here's a nice explanation of
 why I
 [didn't choose JSON](https://www.lucidchart.com/techblog/2018/07/16/why-json-isnt-a-good-configuration-language/).
 
+This largeish single-file program is not generally best
+software engineering practice. However, it does make this
+synth much easier to distribute and deploy; also, if it gets
+way too big for one file that's a good sign that it needs to
+be simplified.
+
 ## License
 
 This program is licensed under the "MIT License".  Please
