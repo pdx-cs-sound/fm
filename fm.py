@@ -6,8 +6,28 @@
 
 # MIDI synthesizer in Python.
 
+# Sample Processing Strategy
+#
+# This code contains a set of note objects called `notemap`,
+# maintained jointly by the main MIDI processing loop and
+# the `mix()` function. It also contains a dict `keymap`
+# mapping MIDI key numbers to note objects, maintained by
+# the MIDI processing loop.
+#
+# When a MIDI note-on event is received, a note object for
+# that key is put in the notemap and in the keymap. When
+# `mix()` is called in `callback()` to get a sample, it runs
+# through the notemap extracting a sample from each note. If
+# a note has no more samples to give, because it has played
+# completely, it is removed from the notemap by
+# `mix()`. When a MIDI note-off event is received, the
+# corresponding keymap entry's note object gets an `off()`
+# message to tell it to start its release, and the keymap
+# forgets the note so that it can be played again.
+
 import argparse, array, math, mido, pyaudio, toml, sys
 
+# Process command-line arguments.
 ap = argparse.ArgumentParser()
 ap.add_argument(
     "-k", "--keyboard",
@@ -22,10 +42,14 @@ ap.add_argument(
 args = ap.parse_args()
 
 # Parameters
+# 
+# Current master volume in linear units.
 volume = 0.5
+# Number of voices to play before compressing output volume
+# to inhibit clipping.
 compression = 5
 
-# Parse a keyboard map if given.
+# Parse a TOML keyboard map if given.
 button_stop = None
 knob_volume = None
 keyboard_name = None
@@ -47,14 +71,17 @@ if args.kbmap is not None:
         if "volume" in controls:
             knob_volume = controls["volume"]
 
-# Use a keyboard name if given.
+# Use a keyboard name if given. This will override
+# the keyboard map.
 if args.keyboard is not None:
     keyboard_name = args.keyboard
 
 # Open an input port.
 if keyboard_name is None:
+    # Accept pending ALSA (or whatever) MIDI connection.
     inport = mido.open_input('fm', virtual=True)
 else:
+    # Open the named MIDI keyboard.
     inport = mido.open_input(keyboard_name)
 assert inport != None
 
@@ -75,7 +102,7 @@ s_attack = int(rate * t_attack)
 t_release = 0.01
 s_release = int(rate * t_release)
 
-# Conversion table for keys to radian frequencies.
+# Conversion table: MIDI key numbers to frequencies in Hz.
 # Key 69 is A4 (440 Hz).
 key_to_freq = [440 * 2**((key - 69) / 12) for key in range(128)]
 
@@ -100,14 +127,14 @@ class Sine(object):
         return math.sin((t + tv) * self.period)
 
 class FM(object):
-    """Sine VCO."""
+    """FM VCO."""
     def __init__(self, f, fmod = 3.0, amod = 40.0):
         """Make a new FM generator."""
         self.sine = Sine(f)
         # XXX It turns out to sound better to have the
         # modulation frequency adapt to the note frequency.
         self.lfo = Sine(f + fmod)
-        self.amod = 40.0
+        self.amod = amod
 
     def sample(self, t, tv = 0.0):
         """Return the next sample from this generator."""
@@ -125,9 +152,10 @@ class Square(object):
         """Return the next sample from this generator."""
         return 2.0 * int(((t + tv + self.tmod) % self.tmod) > self.half) - 1.0
 
-class Key(object):
-    """Key processor."""
+class Note(object):
+    """Note generator with envelope processing."""
     def __init__(self, key, velocity, gen):
+        """Make a new note with envelope."""
         self.t = 0
         self.key = key
         self.velocity = velocity
@@ -221,7 +249,7 @@ while True:
         velocity = mesg.velocity / 127
         print('note on', key, mesg.velocity, round(velocity, 2))
         assert key not in keymap
-        note = Key(key, velocity, FM)
+        note = Note(key, velocity, FM)
         keymap[key] = note
         notemap.add(note)
     elif mesg_type == 'note_off':
