@@ -32,7 +32,8 @@ compression = 5
 # message to tell it to start its release, and the keymap
 # forgets the note so that it can be played again.
 
-import argparse, array, math, mido, pyaudio, toml, sys
+import argparse, array, math, mido, pyaudio, soundfile, toml, sys
+import numpy as np
 
 # Process command-line arguments.
 ap = argparse.ArgumentParser()
@@ -230,6 +231,32 @@ class Square(object):
         """Return the next sample from this generator."""
         return 2.0 * int(((t + tv + self.tmod) % self.tmod) > self.half) - 1.0
 
+class Wave(object):
+    """Wavetable VCO."""
+    def __init__(self, f):
+        """Make a new wave generator."""
+        with soundfile.SoundFile("440.wav") as in_sound:
+            psignal = in_sound.read().astype(np.float64)
+        # Adjust global peak amplitude.
+        peak = np.max(np.abs(psignal))
+        psignal *= 1.0 / peak
+        # XXX Should find fundamental frequency with DFT.
+        self.step = f / 440.0
+        # XXX Should loop the sample properly
+        self.wavetable = psignal
+        self.nwavetable = len(psignal)
+
+    def sample(self, t, tv = None):
+        """Return the next sample from this generator."""
+        assert tv is None
+        # XXX Should antialias
+        t0 = (self.step * t) % self.nwavetable
+        i = int(t0)
+        frac = t0 % 1.0
+        x0 = self.wavetable[i]
+        x1 = self.wavetable[(i + 1) % self.nwavetable]
+        return x0 * frac + x1 * (1.0 - frac)
+
 class Note(object):
     """Note generator with envelope processing."""
     def __init__(self, key, velocity, gen):
@@ -322,7 +349,7 @@ while True:
         velocity = mesg.velocity / 127
         print('note on', key, mesg.velocity, round(velocity, 2))
         assert key not in keymap
-        note = Note(key, velocity, FM)
+        note = Note(key, velocity, Wave)
         keymap[key] = note
         notemap.add(note)
     elif mesg_type == 'note_off':
