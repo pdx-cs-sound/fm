@@ -34,7 +34,7 @@ compression = 5
 
 import argparse, array, math, mido, pyaudio, toml, sys, wave
 import numpy as np
-
+import numpy.fft as fft
 class Saw(object):
     """Sawtooth VCO."""
     def __init__(self, f):
@@ -94,8 +94,8 @@ class GenFM(object):
 
 class Wave(object):
     """Wavetable VCO"""
-    def __init__(self, wavetable, f):
-        self.step = f / 440.0
+    def __init__(self, wavetable, f0, f):
+        self.step = f / f0
         self.wavetable = wavetable
         self.nwavetable = len(wavetable)
 
@@ -141,12 +141,32 @@ class GenWave(object):
         # Adjust global peak amplitude.
         peak = np.max(np.abs(psignal))
         psignal /= peak
-        # XXX Should find fundamental frequency with DFT.
+        # Find fundamental frequency with DFT.
+        npsignal = len(psignal)
+        ndft = 2
+        minsamples = int(0.1 * rate)
+        if npsignal < minsamples:
+            raise Exception("sample too short")
+        while ndft < 16 * 1024 and 2 * ndft <= npsignal:
+            ndft *= 2
+        if npsignal > ndft:
+            start = (npsignal - ndft) // 2
+            fsignal = psignal[start:start + ndft]
+        else:
+            fsignal = psignal
+        assert len(fsignal) == ndft
+        window = np.blackman(ndft)
+        dft = fft.fft(fsignal * window)
+        maxbin = np.argmax(np.abs(dft))
+        maxf = fft.fftfreq(ndft, 1 / rate)[maxbin]
+        if maxf < 100 or maxf > 4000:
+            raise Exception(f"sample frequency {maxf} out of range")
+        self.f0 = maxf
         # XXX Should loop the sample properly
         self.wavetable = psignal
 
     def __call__(self, f):
-        return Wave(self.wavetable, f)
+        return Wave(self.wavetable, self.f0, f)
 
 # Process command-line arguments.
 class ParseGenerator(argparse.Action):
