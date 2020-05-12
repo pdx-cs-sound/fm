@@ -13,6 +13,15 @@ rate = 48000
 # to inhibit clipping.
 compression = 5
 
+debugging = False
+def debug(*args, **kwargs):
+    """Print message if debugging."""
+    if debugging:
+        if "file" in kwargs:
+            raise Exception("file argument to debug function")
+        kwargs["file"] = sys.stderr
+        print(*args, **kwargs)
+
 # Sample Processing Strategy
 #
 # This code contains a set of note objects called `notemap`,
@@ -133,6 +142,16 @@ def read_wave(filename):
         fsamples = scale * (samples + sampleoff)
         return samples
 
+def write_wave(filename, samples):
+    """Write samples to a wave file."""
+    with wave.open(filename, "wb") as w:
+        out = (samples * 32767).astype(np.int16)
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.setnframes(len(out))
+        w.writeframesraw(out)
+
 class GenWave(object):
     """Wavetable VCO factory."""
     def __init__(self, samplefile):
@@ -141,6 +160,7 @@ class GenWave(object):
         # Adjust global peak amplitude.
         peak = np.max(np.abs(psignal))
         psignal /= peak
+        # XXX Should compress the signal hard.
         # Find fundamental frequency with DFT.
         npsignal = len(psignal)
         ndft = 2
@@ -158,38 +178,42 @@ class GenWave(object):
         window = np.blackman(ndft)
         dft = fft.fft(fsignal * window)
         maxbin = np.argmax(np.abs(dft))
-        maxf = fft.fftfreq(ndft, 1 / rate)[maxbin]
+        maxf = abs(fft.fftfreq(ndft, 1 / rate)[maxbin])
         if maxf < 100 or maxf > 4000:
             raise Exception(f"sample frequency {maxf} out of range")
+        debug(f"maxf={maxf}")
+        # XXX Should auto-truncate the signal to sustain (hard).
+        # Loop the sample properly (if sufficient samples).
+        # Heuristic considers first 8 vs last 16 periods' worth of
+        # samples.
+        p = rate / maxf
+        debug(f"period={p}")
+        w = int(p * 8)
+        if npsignal >= 2 * w:
+            ssignal = psignal[-2 * w:]
+            tsignal = psignal[:w]
+            corrs = np.correlate(ssignal, tsignal, mode='valid')
+            maxc = np.argmax(corrs)
+            debug(f"maxc={maxc} corr={corrs[maxc]}")
+            trunc = w - maxc
+            psignal = psignal[:-trunc]
+            # Smooth the transition over a period.
+            t = int(p)
+            sweight = np.linspace(0, 1, t)
+            ssignal = psignal[:t]
+            tweight = np.linspace(1, 0, t)
+            tsignal = psignal[-t:]
+            smoothed = sweight * ssignal + tweight * tsignal
+            psignal = np.append(psignal[:-t], smoothed)
+            # write_wave("trunc.wav", psignal)
+        # Save analysis results for Wave creation.
         self.f0 = maxf
-        # XXX Should loop the sample properly
         self.wavetable = psignal
 
     def __call__(self, f):
         return Wave(self.wavetable, self.f0, f)
 
 # Process command-line arguments.
-class ParseGenerator(argparse.Action):
-    """Parse the various generator arguments."""
-    def __init__(self, option_strings, dest, **kwargs):
-        parent = super(ParseGenerator, self)
-        parent.__init__(option_strings, dest, **kwargs)
-
-    def __call__(self, parser, namespace, values, option_string=None):
-        if hasattr(namespace, "generator"):
-            raise ValueError("multiple generators")
-        dest = self.dest
-        basics = {"sine": Sine, "saw": Saw, "square": Square}
-        if dest in basics:
-            gen = basics[dest]
-        elif dest == "wave":
-            gen = GenWave(*values)
-        elif dest == "fm":
-            gen = GenFM(*values)
-        else:
-            raise ValueError(f"unknown generator {dest}")
-        setattr(namespace, "generator", gen)
-
 ap = argparse.ArgumentParser()
 ap.add_argument(
     "-k", "--keyboard",
@@ -204,45 +228,65 @@ ap.add_argument(
 ap.add_argument(
     "--sine", "--sin",
     help="Use sine wave generator",
-    nargs = 0,
-    action=ParseGenerator,
-    dest="sine",
+    action="store_true",
 )
 ap.add_argument(
     "--square",
     help="Use square wave generator",
-    nargs = 0,
-    action=ParseGenerator,
+    action="store_true",
 )
 ap.add_argument(
     "--saw", "--sawtooth",
     help="Use sawtooth wave generator",
-    nargs = 0,
-    action=ParseGenerator,
-    dest="saw",
+    action="store_true",
 )
 ap.add_argument(
     "--fm", "--FM",
     help="Use FM generator with given mod delta-freq and depth",
     nargs = 2,
-    action=ParseGenerator,
     type = float,
     metavar=("FMOD", "DMOD"),
-    dest="fm",
 )
 ap.add_argument(
     "--wave", "--sample",
     help="Use wave (sampling) generator with given .wav file",
     nargs = 1,
-    action=ParseGenerator,
     metavar="WAVFILE",
-    dest="wave",
+)
+ap.add_argument(
+    "-d", "--debug",
+    help="Print debugging messages",
+    action="store_true",
 )
 args = ap.parse_args()
 
-if hasattr(args, "generator"):
-    generator = args.generator
-else:
+if args.debug:
+    debugging = True
+
+# Find a generator.
+generator = None
+def get_gen(name, gen):
+    global generator
+    if hasattr(args, name):
+        values = getattr(args, name)
+        mygen = None
+        if type(values) == bool:
+            if values:
+                mygen = gen
+        else:
+            if values is not None:
+                mygen = gen(*values)
+        if mygen is not None:
+            if generator is not None:
+                raise Exception("multiple generators specified")
+            generator = mygen
+
+basics = {"sine": Sine, "saw": Saw, "square": Square}
+for name in basics:
+    get_gen(name, basics[name])
+get_gen("wave", GenWave)
+get_gen("fm", GenFM)
+if generator is None:
     generator = GenFM(3.0, 40.0)
 
 # Global sample clock, indicating the number of samples
