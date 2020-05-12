@@ -35,7 +35,119 @@ compression = 5
 import argparse, array, math, mido, pyaudio, soundfile, toml, sys
 import numpy as np
 
+class Saw(object):
+    """Sawtooth VCO."""
+    def __init__(self, f):
+        """Make a new sawtooth generator."""
+        self.tmod = rate / f
+
+    def sample(self, t, tv = 0.0):
+        """Return the next sample from this generator."""
+        return 2.0 * (((t + tv + self.tmod) % self.tmod) / self.tmod) - 1.0
+
+class Sine(object):
+    """Sine VCO."""
+    def __init__(self, f):
+        """Make a new sine generator."""
+        self.period = 2 * math.pi * f / rate
+
+    def sample(self, t, tv = 0.0):
+        """Return the next sample from this generator."""
+        return math.sin((t + tv) * self.period)
+
+
+class Square(object):
+    """Square VCO."""
+    def __init__(self, f):
+        """Make a new square generator."""
+        self.tmod = rate / f
+        self.half = self.tmod / 2.0
+
+    def sample(self, t, tv = 0.0):
+        """Return the next sample from this generator."""
+        return 2.0 * int(((t + tv + self.tmod) % self.tmod) > self.half) - 1.0
+
+class FM(object):
+    """FM VCO."""
+    def __init__(self, f, fmod = 3.0, amod = 40.0):
+        """Make a new FM generator."""
+        self.sine = Sine(f)
+        # XXX It turns out to sound better to have the
+        # modulation frequency adapt to the note frequency.
+        self.lfo = Sine(f + fmod)
+        self.amod = amod
+
+    def sample(self, t, tv = 0.0):
+        """Return the next sample from this generator."""
+        tmod = self.amod * self.lfo.sample(t, tv=tv)
+        return self.sine.sample(t, tv=tmod)
+
+class GenFM(object):
+    """FM VCO factory."""
+    def __init__(self, fmod, amod):
+        """Make a new FM generator generator."""
+        self.fmod = fmod
+        self.amod = amod
+
+    def __call__(self, f):
+        return FM(f, fmod=self.fmod, amod=self.amod)
+
+class Wave(object):
+    """Wavetable VCO"""
+    def __init__(self, wavetable, f):
+        self.step = f / 440.0
+        self.wavetable = wavetable
+        self.nwavetable = len(wavetable)
+
+    def sample(self, t, tv = None):
+        """Return the next sample from this generator."""
+        assert tv is None
+        # XXX Should antialias
+        t0 = (self.step * t) % self.nwavetable
+        i = int(t0)
+        frac = t0 % 1.0
+        x0 = self.wavetable[i]
+        x1 = self.wavetable[(i + 1) % self.nwavetable]
+        return x0 * frac + x1 * (1.0 - frac)
+
+class GenWave(object):
+    """Wavetable VCO factory."""
+    def __init__(self, samplefile):
+        """Make a new wave generator generator."""
+        with soundfile.SoundFile(samplefile) as in_sound:
+            psignal = in_sound.read().astype(np.float64)
+        # Adjust global peak amplitude.
+        peak = np.max(np.abs(psignal))
+        psignal /= peak
+        # XXX Should find fundamental frequency with DFT.
+        # XXX Should loop the sample properly
+        self.wavetable = psignal
+
+    def __call__(self, f):
+        return Wave(self.wavetable, f)
+
 # Process command-line arguments.
+class ParseGenerator(argparse.Action):
+    """Parse the various generator arguments."""
+    def __init__(self, option_strings, dest, **kwargs):
+        parent = super(ParseGenerator, self)
+        parent.__init__(option_strings, dest, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        if hasattr(namespace, "generator"):
+            raise ValueError("multiple generators")
+        dest = self.dest
+        basics = {"sine": Sine, "saw": Saw, "square": Square}
+        if dest in basics:
+            gen = basics[dest]
+        elif dest == "wave":
+            gen = GenWave(*values)
+        elif dest == "fm":
+            gen = GenFM(*values)
+        else:
+            raise ValueError(f"unknown generator {dest}")
+        setattr(namespace, "generator", gen)
+
 ap = argparse.ArgumentParser()
 ap.add_argument(
     "-k", "--keyboard",
@@ -47,7 +159,49 @@ ap.add_argument(
     help="Use given JSON keyboard map file.",
     type=str,
 )
+ap.add_argument(
+    "--sine", "--sin",
+    help="Use sine wave generator",
+    nargs = 0,
+    action=ParseGenerator,
+    dest="sine",
+)
+ap.add_argument(
+    "--square",
+    help="Use square wave generator",
+    nargs = 0,
+    action=ParseGenerator,
+)
+ap.add_argument(
+    "--saw", "--sawtooth",
+    help="Use sawtooth wave generator",
+    nargs = 0,
+    action=ParseGenerator,
+    dest="saw",
+)
+ap.add_argument(
+    "--fm", "--FM",
+    help="Use FM generator with given mod delta-freq and depth",
+    nargs = 2,
+    action=ParseGenerator,
+    type = float,
+    metavar=("FMOD", "DMOD"),
+    dest="fm",
+)
+ap.add_argument(
+    "--wave", "--sample",
+    help="Use wave (sampling) generator with given .wav file",
+    nargs = 1,
+    action=ParseGenerator,
+    metavar="WAVFILE",
+    dest="wave",
+)
 args = ap.parse_args()
+
+if hasattr(args, "generator"):
+    generator = args.generator
+else:
+    generator = GenFM(3.0, 40.0)
 
 # Global sample clock, indicating the number of samples
 # played since synthesizer start (excluding underruns).
@@ -185,78 +339,6 @@ s_release = int(rate * t_release)
 # Key 69 is A4 (440 Hz).
 key_to_freq = [440 * 2**((key - 69) / 12) for key in range(128)]
 
-class Saw(object):
-    """Sawtooth VCO."""
-    def __init__(self, f):
-        """Make a new sawtooth generator."""
-        self.tmod = rate / f
-
-    def sample(self, t, tv = 0.0):
-        """Return the next sample from this generator."""
-        return 2.0 * (((t + tv + self.tmod) % self.tmod) / self.tmod) - 1.0
-
-class Sine(object):
-    """Sine VCO."""
-    def __init__(self, f):
-        """Make a new sine generator."""
-        self.period = 2 * math.pi * f / rate
-
-    def sample(self, t, tv = 0.0):
-        """Return the next sample from this generator."""
-        return math.sin((t + tv) * self.period)
-
-class FM(object):
-    """FM VCO."""
-    def __init__(self, f, fmod = 3.0, amod = 40.0):
-        """Make a new FM generator."""
-        self.sine = Sine(f)
-        # XXX It turns out to sound better to have the
-        # modulation frequency adapt to the note frequency.
-        self.lfo = Sine(f + fmod)
-        self.amod = amod
-
-    def sample(self, t, tv = 0.0):
-        """Return the next sample from this generator."""
-        tmod = self.amod * self.lfo.sample(t, tv=tv)
-        return self.sine.sample(t, tv=tmod)
-
-class Square(object):
-    """Square VCO."""
-    def __init__(self, f):
-        """Make a new square generator."""
-        self.tmod = rate / f
-        self.half = self.tmod / 2.0
-
-    def sample(self, t, tv = 0.0):
-        """Return the next sample from this generator."""
-        return 2.0 * int(((t + tv + self.tmod) % self.tmod) > self.half) - 1.0
-
-class Wave(object):
-    """Wavetable VCO."""
-    def __init__(self, f):
-        """Make a new wave generator."""
-        with soundfile.SoundFile("440.wav") as in_sound:
-            psignal = in_sound.read().astype(np.float64)
-        # Adjust global peak amplitude.
-        peak = np.max(np.abs(psignal))
-        psignal *= 1.0 / peak
-        # XXX Should find fundamental frequency with DFT.
-        self.step = f / 440.0
-        # XXX Should loop the sample properly
-        self.wavetable = psignal
-        self.nwavetable = len(psignal)
-
-    def sample(self, t, tv = None):
-        """Return the next sample from this generator."""
-        assert tv is None
-        # XXX Should antialias
-        t0 = (self.step * t) % self.nwavetable
-        i = int(t0)
-        frac = t0 % 1.0
-        x0 = self.wavetable[i]
-        x1 = self.wavetable[(i + 1) % self.nwavetable]
-        return x0 * frac + x1 * (1.0 - frac)
-
 class Note(object):
     """Note generator with envelope processing."""
     def __init__(self, key, velocity, gen):
@@ -349,7 +431,7 @@ while True:
         velocity = mesg.velocity / 127
         print('note on', key, mesg.velocity, round(velocity, 2))
         assert key not in keymap
-        note = Note(key, velocity, Wave)
+        note = Note(key, velocity, generator)
         keymap[key] = note
         notemap.add(note)
     elif mesg_type == 'note_off':
