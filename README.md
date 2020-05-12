@@ -48,9 +48,9 @@ A small selection of sounds can be chosen from the command line.
 
 * `--wave <wavefile>`: Very crude sampling synthesis. The
   wave file must be a 48000 sample-per-second single-channel
-  `.wav`. The entire file will be treated as a loop. The
-  envelope will be derived from the built-in envelope
-  generator.
+  integer (8, 16 or 24 bit) `.wav`. The entire file will be
+  treated as a loop. The envelope will be derived from the
+  built-in envelope generator.
 
 ## Status
 

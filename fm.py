@@ -32,7 +32,7 @@ compression = 5
 # message to tell it to start its release, and the keymap
 # forgets the note so that it can be played again.
 
-import argparse, array, math, mido, pyaudio, soundfile, toml, sys
+import argparse, array, math, mido, pyaudio, toml, sys, wave
 import numpy as np
 
 class Saw(object):
@@ -110,12 +110,34 @@ class Wave(object):
         x1 = self.wavetable[(i + 1) % self.nwavetable]
         return x0 * frac + x1 * (1.0 - frac)
 
+def read_wave(filename):
+    """Read samples from a wave file."""
+    with wave.open(filename, "rb") as w:
+        info = w.getparams()
+        fbytes = w.readframes(info.nframes)
+        w.close()
+        sampletypes = {
+            1: (np.uint8, -(1 << 7), 1 << 8),
+            2: (np.int16, 0.5, 1 << 16),
+            4: (np.int32, 0.5, 1 << 32),
+        }
+        if info.sampwidth not in sampletypes:
+            raise IOException("invalid wave file format")
+        if info.nchannels != 1:
+            raise IOException("wave file must be mono (1 channel)")
+        if info.framerate != rate:
+            raise IOException(f"wave file frame rate must be {rate}")
+        sampletype, sampleoff, samplewidth = sampletypes[info.sampwidth]
+        samples = np.frombuffer(fbytes, dtype=sampletype).astype(np.float64)
+        scale = 2.0 / samplewidth
+        fsamples = scale * (samples + sampleoff)
+        return samples
+
 class GenWave(object):
     """Wavetable VCO factory."""
     def __init__(self, samplefile):
         """Make a new wave generator generator."""
-        with soundfile.SoundFile(samplefile) as in_sound:
-            psignal = in_sound.read().astype(np.float64)
+        psignal = read_wave(samplefile)
         # Adjust global peak amplitude.
         peak = np.max(np.abs(psignal))
         psignal /= peak
