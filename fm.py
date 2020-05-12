@@ -250,7 +250,7 @@ ap.add_argument(
 ap.add_argument(
     "--wave", "--sample",
     help="Use wave (sampling) generator with given .wav file",
-    nargs = 1,
+    type = str,
     metavar="WAVFILE",
 )
 ap.add_argument(
@@ -265,17 +265,25 @@ if args.debug:
 
 # Find a generator.
 generator = None
-def get_gen(name, gen):
+def get_gen(name, gen, args="flag"):
     global generator
     if hasattr(args, name):
         values = getattr(args, name)
         mygen = None
-        if type(values) == bool:
-            if values:
-                mygen = gen
+        if args == "flag":
+            if not values:
+                return
+            mygen = gen
+        elif args == "list":
+            if values is None:
+                return
+            mygen = gen(*values)
+        elif args == "string":
+            if values is None:
+                return
+            mygen = gen(values)
         else:
-            if values is not None:
-                mygen = gen(*values)
+            raise Exception(f"unknown generator args {args}")
         if mygen is not None:
             if generator is not None:
                 raise Exception("multiple generators specified")
@@ -284,8 +292,8 @@ def get_gen(name, gen):
 basics = {"sine": Sine, "saw": Saw, "square": Square}
 for name in basics:
     get_gen(name, basics[name])
-get_gen("wave", GenWave)
-get_gen("fm", GenFM)
+get_gen("wave", GenWave, args="string")
+get_gen("fm", GenFM, args="list")
 if generator is None:
     generator = GenFM(3.0, 40.0)
 
