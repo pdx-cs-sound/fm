@@ -10,8 +10,10 @@ name = "Mobile Keys 49"
 # suppressed = []
 
 [controls]
-# Volume knob.
+# Volume knob
 volume = 7
+# Mod Wheel
+modwheel = 1
 # Stop the synthesizer immediately and exit when the volume
 # is turned to zero. Not optimal, but there's really no
 # obvious off control for this keyboard. XXX This must come

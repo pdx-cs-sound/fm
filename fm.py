@@ -13,7 +13,11 @@ rate = 48000
 # to inhibit clipping.
 compression = 5
 
-debugging = False
+import argparse, array, math, mido, pyaudio, toml, sys, wave
+import numpy as np
+import numpy.fft as fft
+
+debugging = True
 def debug(*args, **kwargs):
     """Print message if debugging."""
     if debugging:
@@ -41,9 +45,6 @@ def debug(*args, **kwargs):
 # message to tell it to start its release, and the keymap
 # forgets the note so that it can be played again.
 
-import argparse, array, math, mido, pyaudio, toml, sys, wave
-import numpy as np
-import numpy.fft as fft
 class Saw(object):
     """Sawtooth VCO."""
     def __init__(self, f):
@@ -78,7 +79,7 @@ class Square(object):
 
 class FM(object):
     """FM VCO."""
-    def __init__(self, f, fmod = 3.0, amod = 40.0):
+    def __init__(self, f, fmod, amod):
         """Make a new FM generator."""
         self.sine = Sine(f)
         # XXX It turns out to sound better to have the
@@ -88,12 +89,13 @@ class FM(object):
 
     def sample(self, t, tv = 0.0):
         """Return the next sample from this generator."""
-        tmod = self.amod * self.lfo.sample(t, tv=tv)
+        depth = control_modwheel.value()
+        tmod = self.amod * depth * self.lfo.sample(t, tv=tv)
         return self.sine.sample(t, tv=tmod)
 
 class GenFM(object):
     """FM VCO factory."""
-    def __init__(self, fmod, amod):
+    def __init__(self, fmod=40, amod=5):
         """Make a new FM generator generator."""
         self.fmod = fmod
         self.amod = amod
@@ -295,7 +297,7 @@ for name in basics:
 get_gen("wave", GenWave, args="string")
 get_gen("fm", GenFM, args="list")
 if generator is None:
-    generator = GenFM(3.0, 40.0)
+    generator = GenFM()
 
 # Global sample clock, indicating the number of samples
 # played since synthesizer start (excluding underruns).
@@ -305,13 +307,15 @@ sample_clock = 0
 button_stop = None
 control_stop = None
 knob_volume = None
+knob_modwheel = None
+knob_param1 = None
 keyboard_name = None
 control_suppressed = set()
 if args.kbmap is not None:
     try:
         kbmap = toml.load(args.kbmap)
     except Exception as e:
-        print("cannot load kbmap", e, file=sys.stderr)
+        debug("cannot load kbmap", e)
         exit(1)
     if "name" in kbmap:
         keyboard_name = kbmap["name"]
@@ -323,6 +327,10 @@ if args.kbmap is not None:
             button_stop = controls["stop"]
         if "volume" in controls:
             knob_volume = controls["volume"]
+        if "modwheel" in controls:
+            knob_modwheel = controls["modwheel"]
+        if "param1" in controls:
+            knob_param1 = controls["param1"]
 
 # Use a keyboard name if given. This will override
 # the keyboard map.
@@ -347,7 +355,7 @@ else:
         except IOError as e:
             pass
     if not found:
-        print(f"cannot find keyboard {keyboard_name}", file=sys.stderr)
+        debug(f"cannot find keyboard {keyboard_name}")
         exit(1)
     
 assert inport != None
@@ -369,7 +377,7 @@ class Knob(object):
         else:
             raise Exception(f"unknown knob scaling {scaling}")
         # Target control value.
-        self.cvalue = self.scaler(initial)
+        self.cvalue = initial
         # Current interpolation between previous and target
         # control value.
         self.ivalue = self.cvalue
@@ -380,17 +388,17 @@ class Knob(object):
 
     def set(self, cvalue):
         """Set new knob target value at current time."""
-        self.cvalue = self.scaler(cvalue)
+        self.cvalue = cvalue
         self.t = sample_clock
 
-    def value(self, t):
+    def value(self):
         """Update and return knob interpolated value at time t."""
-        ds = (t - self.t) * self.irate
+        ds = min((sample_clock - self.t) * self.irate, 1.0)
         assert ds >= 0
         self.ivalue = self.cvalue * ds + self.ivalue * (1.0 - ds)
-        self.t = t
-        return self.ivalue
-
+        self.t = sample_clock
+        return self.scaler(self.ivalue)
+    
     def name(self):
         """Canonical name of knob."""
         return self.knob_name
@@ -402,6 +410,14 @@ controls = dict()
 control_volume = Knob("volume")
 if knob_volume is not None:
     controls[knob_volume] = control_volume
+
+# Set up the parameter controls.
+control_modwheel = Knob("modwheel")
+if knob_modwheel is not None:
+    controls[knob_modwheel] = control_modwheel
+control_param1 = Knob("param1")
+if knob_param1 is not None:
+    controls[knob_param1] = control_param1
 
 # Set up the stop control if needed. XXX This is a kludge to
 # make a knob turned to zero exit the synth.
@@ -474,7 +490,7 @@ def clamp(v, c):
     """Clamp a value v to +- c."""
     return min(max(v, -c), c)
 
-def mix(t):
+def mix():
     """Accumulate a composite sample from the active generators."""
     # Gather samples and count notes.
     s = 0
@@ -491,15 +507,16 @@ def mix(t):
     # Do gain adjustments based on number of playing notes.
     if n == 0:
         return 0
-    return control_volume.value(t) * s / max(n, compression)
+    return control_volume.value() * s / max(n, compression)
 
 def callback(in_data, frame_count, time_info, status):
     """Supply frames to PortAudio."""
     # Get frames of waveform.
     global sample_clock
-    data = [ clamp(int(32767.0 * mix(sample_clock + i)), 32767)
-             for i in range(frame_count) ]
-    sample_clock += frame_count
+    data = []
+    for i in range(frame_count):
+        data.append(clamp(int(32767.0 * mix()), 32767))
+        sample_clock += 1
     # Get the frames into the right format for PA.
     frames = bytes(array.array('h', data))
     # Return frames and continue signal.
@@ -523,7 +540,7 @@ while True:
     if mesg_type == 'note_on':
         key = mesg.note
         velocity = mesg.velocity / 127
-        print('note on', key, mesg.velocity, round(velocity, 2))
+        debug('note on', key, mesg.velocity, round(velocity, 2))
         assert key not in keymap
         note = Note(key, velocity, generator)
         keymap[key] = note
@@ -531,7 +548,7 @@ while True:
     elif mesg_type == 'note_off':
         key = mesg.note
         velocity = mesg.velocity / 127
-        print('note off', key, mesg.velocity, round(velocity, 2))
+        debug('note off', key, mesg.velocity, round(velocity, 2))
         if key in keymap:
             keymap[key].off(velocity)
             del keymap[key]
@@ -543,16 +560,18 @@ while True:
             # turned to zero.
             if mesg.control == control_stop and mesg.value == 0:
                 break
-            controls[mesg.control].set(mesg.value)
+            c = controls[mesg.control]
+            debug(f"control {c.name()} = {mesg.value}")
+            c.set(mesg.value)
         elif mesg.control in control_suppressed:
             pass
         else:
-            print(f'unknown control {mesg.control}')
+            debug(f'unknown control {mesg.control}')
     else:
-        print('unknown message', mesg)
+        debug('unknown message', mesg)
 
 # Done, clean up and exit.
-print('exiting')
+debug('exiting')
 for key in set(keymap):
     keymap[key].off(1.0)
     del keymap[key]

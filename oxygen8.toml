@@ -14,8 +14,12 @@ name = "USB Oxygen 8 v2"
 # suppressed = []
 
 [controls]
-# Volume knob.
+# Volume knob (Knob C5)
 volume = 71
+# Mod Wheel
+modwheel = 1
+# Parameter 1 (Knob C1)
+param1 = 91
 # Button that will stop the synthesizer immediately and exit
-# when pressed. Mapped to media stop key (square).
+# when pressed (Media "stop key" -- square)
 stop = 23
