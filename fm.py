@@ -245,15 +245,21 @@ ap.add_argument(
 ap.add_argument(
     "--fm", "--FM",
     help="Use FM generator with given mod delta-freq and depth",
-    nargs = 2,
-    type = float,
+    nargs=2,
+    type=float,
     metavar=("FMOD", "DMOD"),
 )
 ap.add_argument(
     "--wave", "--sample",
     help="Use wave (sampling) generator with given .wav file",
-    type = str,
+    type=str,
     metavar="WAVFILE",
+)
+ap.add_argument(
+    "--just",
+    help="Use just intonation (root is BASE half-steps above A)",
+    type=int,
+    metavar="BASE",
 )
 ap.add_argument(
     "-d", "--debug",
@@ -445,9 +451,23 @@ s_attack = int(rate * t_attack)
 t_release = 0.01
 s_release = int(rate * t_release)
 
-# Conversion table: MIDI key numbers to frequencies in Hz.
-# Key 69 is A4 (440 Hz).
-key_to_freq = [440 * 2**((key - 69) / 12) for key in range(128)]
+just_ratios = [
+    1, 16/15, 9/8, 6/5, 5/4, 4/3, 45/32, 3/2, 8/5, 5/3, 9/5, 15/8,
+]
+
+def key_to_freq(key):
+    """Convert MIDI key number to frequency in Hz.
+    Key 69 is A4 (440 Hz)."""
+    just_base = args.just
+    if just_base is None:
+        return 440 * 2**((key - 69) / 12)
+    just_base_freq = 440 * 2**((just_base - 69) / 12)
+    octave = (key - just_base + 3) // 12
+    offset = key - just_base + 3 - octave * 12
+    print("just", key, octave, offset)
+    return just_base_freq * 2**octave * just_ratios[offset]
+
+key_freq = [key_to_freq(key) for key in range(128)]
 
 class Note(object):
     """Note generator with envelope processing."""
@@ -458,7 +478,7 @@ class Note(object):
         self.velocity = velocity
         self.release_time = None
         self.release_length = None
-        self.gen = gen(key_to_freq[key])
+        self.gen = gen(key_freq[key])
 
     def off(self, velocity):
         """Note is turned off. Start release."""

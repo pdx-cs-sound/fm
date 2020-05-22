@@ -52,6 +52,12 @@ A small selection of sounds can be chosen from the command line.
   treated as a loop. The envelope will be derived from the
   built-in envelope generator.
 
+### Tuning
+
+[Five-limit Just intonation](https://en.wikipedia.org/wiki/Just_intonation#Five-limit_tuning)
+can be chosen using `--just BASE`. The `BASE` argument is
+the scale base in half-steps above A.
+
 ## Status
 
 * [x] The keyboard by default tried to listen for a MIDI
