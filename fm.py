@@ -462,7 +462,7 @@ def key_to_freq(key):
     just_base = args.just
     if just_base is None:
         return 440 * 2**((key - 69) / 12)
-    just_base_freq = 440 * 2**((just_base - 69) / 12)
+    just_base_freq = 440 * 2**((just_base - 72) / 12)
     octave = (key - just_base + 3) // 12
     offset = key - just_base + 3 - octave * 12
     # debug("just", key, octave, offset)
