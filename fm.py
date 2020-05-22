@@ -273,35 +273,36 @@ if args.debug:
 
 # Find a generator.
 generator = None
-def get_gen(name, gen, args="flag"):
+def get_gen(name, gen, argstype="flag"):
     global generator
     if hasattr(args, name):
         values = getattr(args, name)
         mygen = None
-        if args == "flag":
-            if not values:
+        if argstype == "flag":
+            if values == False:
                 return
             mygen = gen
-        elif args == "list":
+        elif argstype == "list":
             if values is None:
                 return
             mygen = gen(*values)
-        elif args == "string":
+        elif argstype == "string":
             if values is None:
                 return
             mygen = gen(values)
         else:
-            raise Exception(f"unknown generator args {args}")
+            raise Exception(f"unknown generator argstype {argstype}")
         if mygen is not None:
             if generator is not None:
                 raise Exception("multiple generators specified")
             generator = mygen
+            debug(f"generator {name}")
 
 basics = {"sine": Sine, "saw": Saw, "square": Square}
 for name in basics:
     get_gen(name, basics[name])
-get_gen("wave", GenWave, args="string")
-get_gen("fm", GenFM, args="list")
+get_gen("wave", GenWave, argstype="string")
+get_gen("fm", GenFM, argstype="list")
 if generator is None:
     generator = GenFM()
 
@@ -464,7 +465,7 @@ def key_to_freq(key):
     just_base_freq = 440 * 2**((just_base - 69) / 12)
     octave = (key - just_base + 3) // 12
     offset = key - just_base + 3 - octave * 12
-    print("just", key, octave, offset)
+    # debug("just", key, octave, offset)
     return just_base_freq * 2**octave * just_ratios[offset]
 
 key_freq = [key_to_freq(key) for key in range(128)]
