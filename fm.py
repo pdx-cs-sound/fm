@@ -17,7 +17,7 @@ import argparse, array, math, mido, pyaudio, toml, sys, wave
 import numpy as np
 import numpy.fft as fft
 
-debugging = True
+debugging = False
 def debug(*args, **kwargs):
     """Print message if debugging."""
     if debugging:
@@ -488,6 +488,9 @@ def key_to_freq(key):
     return just_base_freq * 2**octave * just_ratios[offset]
 
 key_freq = [key_to_freq(key) for key in range(128)]
+# if debugging:
+#     for i, f in enumerate(key_freq):
+#         debug(f"key {i} = {f}")
 
 class Note(object):
     """Note generator with envelope processing."""
