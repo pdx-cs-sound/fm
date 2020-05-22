@@ -40,7 +40,7 @@ If you just want to connect to a named keyboard (found by
 
 A small selection of sounds can be chosen from the command line.
 
-* `--sine`, `--square`, `--saw`: Simple wave generators
+* `--sine`, `--square`, `--saw`, `--tri`: Simple wave generators
 
 * `--fm <fmod> <dmod>`: Single FM operator. *fmod* is the
   difference between the key frequency and the modulation

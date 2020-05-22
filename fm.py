@@ -55,6 +55,20 @@ class Saw(object):
         """Return the next sample from this generator."""
         return 2.0 * (((t + tv + self.tmod) % self.tmod) / self.tmod) - 1.0
 
+class Triangle(object):
+    """Triangle VCO."""
+    def __init__(self, f):
+        """Make a new triangle generator."""
+        self.tmod = rate / f
+
+    def sample(self, t, tv = 0.0):
+        """Return the next sample from this generator."""
+        frac = ((t + tv + self.tmod) % self.tmod) / self.tmod
+        if frac <= 0.5:
+            return 4.0 * frac - 1.0
+        else:
+            return 4.0 * (1.0 - frac) - 1.0
+
 class Sine(object):
     """Sine VCO."""
     def __init__(self, f):
@@ -243,6 +257,11 @@ ap.add_argument(
     action="store_true",
 )
 ap.add_argument(
+    "--tri", "--triangle",
+    help="Use sawtooth wave generator",
+    action="store_true",
+)
+ap.add_argument(
     "--fm", "--FM",
     help="Use FM generator with given mod delta-freq and depth",
     nargs=2,
@@ -298,7 +317,7 @@ def get_gen(name, gen, argstype="flag"):
             generator = mygen
             debug(f"generator {name}")
 
-basics = {"sine": Sine, "saw": Saw, "square": Square}
+basics = {"sine": Sine, "saw": Saw, "square": Square, "tri": Triangle}
 for name in basics:
     get_gen(name, basics[name])
 get_gen("wave", GenWave, argstype="string")
