@@ -276,7 +276,13 @@ ap.add_argument(
 )
 ap.add_argument(
     "--just",
-    help="Use just intonation (root is BASE half-steps above A)",
+    help="Use (five-limit) just intonation (root is BASE half-steps above A)",
+    type=int,
+    metavar="BASE",
+)
+ap.add_argument(
+    "--pyth", "--pythagorean",
+    help="Use Pythagorean (three-limit) just intonation (root is BASE half-steps above A)",
     type=int,
     metavar="BASE",
 )
@@ -286,6 +292,14 @@ ap.add_argument(
     action="store_true",
 )
 args = ap.parse_args()
+
+tuning = None
+for base, name in [(args.just, "just"), (args.pyth, "pyth")]:
+    if base is not None:
+        if tuning is not None:
+            raise Exception("multiple tunings specified")
+        tuning_base = base
+        tuning = name
 
 if args.debug:
     debugging = True
@@ -475,17 +489,45 @@ just_ratios = [
     1, 16/15, 9/8, 6/5, 5/4, 4/3, 45/32, 3/2, 8/5, 5/3, 9/5, 15/8,
 ]
 
+pyth_ratios = [
+    1/1, # C
+    256/243, # Db
+    9/8, # D
+    32/27, # Eb
+    81/64, # E
+    4/3, # F
+    # 729/512, # F# Pythagorean
+    # 1024/729, # Gb Pythagorean
+    # Arbitrarily split the comma
+    math.sqrt(2), # Gb / F#
+    3/2, # G
+    128/81, # Ab
+    27/16, # A
+    16/9, # Bb
+    243/128, # B
+]
+
+# Set up for alternate tunings.
+if tuning is not None:
+    base_freq = 440 * 2**((tuning_base - 72) / 12)
+    if tuning == "just":
+        # debug("just tuning")
+        ratios = just_ratios
+    elif tuning == "pyth":
+        # debug("pyth tuning")
+        ratios = pyth_ratios
+    else:
+        raise Exception("unknown tuning", tuning)
+
 def key_to_freq(key):
     """Convert MIDI key number to frequency in Hz.
     Key 69 is A4 (440 Hz)."""
-    just_base = args.just
-    if just_base is None:
+    if tuning is None:
         return 440 * 2**((key - 69) / 12)
-    just_base_freq = 440 * 2**((just_base - 72) / 12)
-    octave = (key - just_base + 3) // 12
-    offset = key - just_base + 3 - octave * 12
+    octave = (key - tuning_base + 3) // 12
+    offset = key - tuning_base + 3 - octave * 12
     # debug("just", key, octave, offset)
-    return just_base_freq * 2**octave * just_ratios[offset]
+    return base_freq * 2**octave * ratios[offset]
 
 key_freq = [key_to_freq(key) for key in range(128)]
 # if debugging:

@@ -58,6 +58,14 @@ A small selection of sounds can be chosen from the command line.
 can be chosen using `--just BASE`. The `BASE` argument is
 the scale base in half-steps above A.
 
+[Three-limit Just intonation](https://en.wikipedia.org/wiki/Just_intonation#Five-limit_tuning)
+can be chosen using `--pyth BASE`. The `BASE` argument is
+the scale base in half-steps above A. The Pythagorean comma
+between 4♯/5♭ is split close to the mean ratio
+(1055729/373248, about 1.41425:1), at a ratio of `sqrt(2):1`
+(1.41421:1). (Yes, this is a poke at Pythagoreans, who never
+would have done that. Sue me.)
+
 ## Status
 
 * [x] The keyboard by default tried to listen for a MIDI
@@ -73,9 +81,11 @@ the scale base in half-steps above A.
   only by editing the source. Added command-line generator
   argument handling.
 
+* [x] Support alternate tunings.
+
 * [ ] Support other MIDI control messages, particularly
   pitch wheel, mod wheel, sustain pedal. In short, provide
-  reasonably full MIDI controls.
+  reasonably full MIDI controls. *(In progress.)*
 
 * [ ] Extend the fixed linear attack-release (AR) envelope,
   to full ADSR and make configurable. Seperate envelopes
