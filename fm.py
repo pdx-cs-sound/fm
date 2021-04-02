@@ -110,31 +110,31 @@ class Square(object):
         a = self.tmul * times
         return 2.0 * (2.0 * np.floor(a) - np.floor(2.0 * a)) + 1.0
 
-#class FM(object):
-#    """FM VCO."""
-#    def __init__(self, f, fmod, amod):
-#        """Make a new FM generator."""
-#        self.sine = Sine(f)
-#        # XXX It turns out to sound better to have the
-#        # modulation frequency adapt to the note frequency.
-#        self.lfo = Sine(f + fmod)
-#        self.amod = amod
-#
-#    def samples(self, t, tv = None, n = 1):
-#        """Return the next n samples from this generator."""
-#        depth = control_modwheel.value()
-#        tmod = self.amod * depth * self.lfo.sample(t, tv=tv)
-#        return self.sine.sample(t, tv=tmod)
-#
-#class GenFM(object):
-#    """FM VCO factory."""
-#    def __init__(self, fmod=40, amod=5):
-#        """Make a new FM generator generator."""
-#        self.fmod = fmod
-#        self.amod = amod
-#
-#    def __call__(self, f):
-#        return FM(f, fmod=self.fmod, amod=self.amod)
+class FM(object):
+    """FM VCO."""
+    def __init__(self, f, fmod, amod):
+        """Make a new FM generator."""
+        self.sine = Sine(f)
+        # XXX It turns out to sound better to have the
+        # modulation frequency adapt to the note frequency.
+        self.lfo = Sine(f + fmod)
+        self.amod = amod
+
+    def samples(self, t, tv = None, n = 1):
+        """Return the next n samples from this generator."""
+        depth = control_modwheel.value()
+        tmod = self.amod * depth * self.lfo.samples(t, tv=None, n=n)
+        return self.sine.samples(t, tv=tmod, n=n)
+
+class GenFM(object):
+    """FM VCO factory."""
+    def __init__(self, fmod=40, amod=5):
+        """Make a new FM generator generator."""
+        self.fmod = fmod
+        self.amod = amod
+
+    def __call__(self, f):
+        return FM(f, fmod=self.fmod, amod=self.amod)
 
 #class Wave(object):
 #    """Wavetable VCO"""
@@ -353,10 +353,10 @@ def get_gen(name, gen, argstype="flag"):
 basics = {"saw": Saw, "sine": Sine, "square": Square, "tri": Triangle}
 for name in basics:
     get_gen(name, basics[name])
+get_gen("fm", GenFM, argstype="list")
 #get_gen("wave", GenWave, argstype="string")
-#get_gen("fm", GenFM, argstype="list")
 if generator is None:
-    generator = Saw
+    generator = GenFM()
 
 # Global sample clock, indicating the number of samples
 # played since synthesizer start (excluding underruns).
