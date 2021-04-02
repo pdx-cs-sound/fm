@@ -50,6 +50,10 @@ A small selection of sounds can be chosen from the command line.
   difference between the key frequency and the modulation
   frequency. *dmod* is the modulation depth (amplitude).
 
+  If no sound argument is given on the command line, the
+  synth defaults to FM with reasonably pleasing default
+  parameters.
+
 * `--wave <wavefile>`: Very crude sampling synthesis. The
   wave file must be a 48000 sample-per-second single-channel
   integer (8, 16 or 24 bit) `.wav`. The entire file will be

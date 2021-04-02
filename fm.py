@@ -123,12 +123,12 @@ class FM(object):
     def samples(self, t, tv = None, n = 1):
         """Return the next n samples from this generator."""
         depth = control_modwheel.value()
-        tmod = self.amod * depth * self.lfo.samples(t, tv=None, n=n)
+        tmod = self.amod * depth * self.lfo.samples(t, n=n)
         return self.sine.samples(t, tv=tmod, n=n)
 
 class GenFM(object):
     """FM VCO factory."""
-    def __init__(self, fmod=40, amod=5):
+    def __init__(self, fmod=2, amod=100):
         """Make a new FM generator generator."""
         self.fmod = fmod
         self.amod = amod
