@@ -36,14 +36,15 @@ def debug(*args, **kwargs):
 #
 # When a MIDI note-on event is received, a note object for
 # that key is put in the notemap and in the keymap. When
-# `mix()` is called in `callback()` to get a sample, it runs
-# through the notemap extracting a sample from each note. If
-# a note has no more samples to give, because it has played
-# completely, it is removed from the notemap by
-# `mix()`. When a MIDI note-off event is received, the
-# corresponding keymap entry's note object gets an `off()`
-# message to tell it to start its release, and the keymap
-# forgets the note so that it can be played again.
+# `mix()` is called in `callback()` to get a block of
+# samples, it runs through the notemap extracting a block of
+# samples from each note. If a note has no more samples to
+# give, because it has played completely, it is removed from
+# the notemap by `mix()`. When a MIDI note-off event is
+# received, the corresponding keymap entry's note object
+# gets an `off()` message to tell it to start its release,
+# and the keymap forgets the note so that it can be played
+# again.
 
 class Saw(object):
     """Sawtooth VCO."""
@@ -51,89 +52,96 @@ class Saw(object):
         """Make a new sawtooth generator."""
         self.tmod = rate / f
 
-    def sample(self, t, tv = 0.0):
-        """Return the next sample from this generator."""
-        return 2.0 * (((t + tv + self.tmod) % self.tmod) / self.tmod) - 1.0
+    def samples(self, t, tv = 0.0, n = 1):
+        """Return the next n samples from this generator."""
+        times = np.linspace(
+            t + tv,
+            t + tv + n,
+            num = n,
+            endpoint = False,
+            dtype = np.float64,
+        )
+        return 2.0 * ((times % self.tmod) / self.tmod) - 1.0
 
-class Triangle(object):
-    """Triangle VCO."""
-    def __init__(self, f):
-        """Make a new triangle generator."""
-        self.tmod = rate / f
-
-    def sample(self, t, tv = 0.0):
-        """Return the next sample from this generator."""
-        frac = ((t + tv + self.tmod) % self.tmod) / self.tmod
-        if frac <= 0.5:
-            return 4.0 * frac - 1.0
-        else:
-            return 4.0 * (1.0 - frac) - 1.0
-
-class Sine(object):
-    """Sine VCO."""
-    def __init__(self, f):
-        """Make a new sine generator."""
-        self.period = 2 * math.pi * f / rate
-
-    def sample(self, t, tv = 0.0):
-        """Return the next sample from this generator."""
-        return math.sin((t + tv) * self.period)
-
-
-class Square(object):
-    """Square VCO."""
-    def __init__(self, f):
-        """Make a new square generator."""
-        self.tmod = rate / f
-        self.half = self.tmod / 2.0
-
-    def sample(self, t, tv = 0.0):
-        """Return the next sample from this generator."""
-        return 2.0 * int(((t + tv + self.tmod) % self.tmod) > self.half) - 1.0
-
-class FM(object):
-    """FM VCO."""
-    def __init__(self, f, fmod, amod):
-        """Make a new FM generator."""
-        self.sine = Sine(f)
-        # XXX It turns out to sound better to have the
-        # modulation frequency adapt to the note frequency.
-        self.lfo = Sine(f + fmod)
-        self.amod = amod
-
-    def sample(self, t, tv = 0.0):
-        """Return the next sample from this generator."""
-        depth = control_modwheel.value()
-        tmod = self.amod * depth * self.lfo.sample(t, tv=tv)
-        return self.sine.sample(t, tv=tmod)
-
-class GenFM(object):
-    """FM VCO factory."""
-    def __init__(self, fmod=40, amod=5):
-        """Make a new FM generator generator."""
-        self.fmod = fmod
-        self.amod = amod
-
-    def __call__(self, f):
-        return FM(f, fmod=self.fmod, amod=self.amod)
-
-class Wave(object):
-    """Wavetable VCO"""
-    def __init__(self, wavetable, f0, f):
-        self.step = f / f0
-        self.wavetable = wavetable
-        self.nwavetable = len(wavetable)
-
-    def sample(self, t, tv = None):
-        """Return the next sample from this generator."""
-        assert tv is None
-        # XXX Should antialias
-        t0 = (self.step * t) % self.nwavetable
-        i = int(t0)
-        frac = t0 % 1.0
-        x0 = self.wavetable[i]
-        x1 = self.wavetable[(i + 1) % self.nwavetable]
-        return x0 * frac + x1 * (1.0 - frac)
+#class Triangle(object):
+#    """Triangle VCO."""
+#    def __init__(self, f):
+#        """Make a new triangle generator."""
+#        self.tmod = rate / f
+#
+#    def sample(self, t, tv = 0.0):
+#        """Return the next sample from this generator."""
+#        frac = ((t + tv + self.tmod) % self.tmod) / self.tmod
+#        if frac <= 0.5:
+#            return 4.0 * frac - 1.0
+#        else:
+#            return 4.0 * (1.0 - frac) - 1.0
+#
+#class Sine(object):
+#    """Sine VCO."""
+#    def __init__(self, f):
+#        """Make a new sine generator."""
+#        self.period = 2 * math.pi * f / rate
+#
+#    def sample(self, t, tv = 0.0):
+#        """Return the next sample from this generator."""
+#        return math.sin((t + tv) * self.period)
+#
+#
+#class Square(object):
+#    """Square VCO."""
+#    def __init__(self, f):
+#        """Make a new square generator."""
+#        self.tmod = rate / f
+#        self.half = self.tmod / 2.0
+#
+#    def sample(self, t, tv = 0.0):
+#        """Return the next sample from this generator."""
+#        return 2.0 * int(((t + tv + self.tmod) % self.tmod) > self.half) - 1.0
+#
+#class FM(object):
+#    """FM VCO."""
+#    def __init__(self, f, fmod, amod):
+#        """Make a new FM generator."""
+#        self.sine = Sine(f)
+#        # XXX It turns out to sound better to have the
+#        # modulation frequency adapt to the note frequency.
+#        self.lfo = Sine(f + fmod)
+#        self.amod = amod
+#
+#    def sample(self, t, tv = 0.0):
+#        """Return the next sample from this generator."""
+#        depth = control_modwheel.value()
+#        tmod = self.amod * depth * self.lfo.sample(t, tv=tv)
+#        return self.sine.sample(t, tv=tmod)
+#
+#class GenFM(object):
+#    """FM VCO factory."""
+#    def __init__(self, fmod=40, amod=5):
+#        """Make a new FM generator generator."""
+#        self.fmod = fmod
+#        self.amod = amod
+#
+#    def __call__(self, f):
+#        return FM(f, fmod=self.fmod, amod=self.amod)
+#
+#class Wave(object):
+#    """Wavetable VCO"""
+#    def __init__(self, wavetable, f0, f):
+#        self.step = f / f0
+#        self.wavetable = wavetable
+#        self.nwavetable = len(wavetable)
+#
+#    def sample(self, t, tv = None):
+#        """Return the next sample from this generator."""
+#        assert tv is None
+#        # XXX Should antialias
+#        t0 = (self.step * t) % self.nwavetable
+#        i = int(t0)
+#        frac = t0 % 1.0
+#        x0 = self.wavetable[i]
+#        x1 = self.wavetable[(i + 1) % self.nwavetable]
+#        return x0 * frac + x1 * (1.0 - frac)
 
 def read_wave(filename):
     """Read samples from a wave file."""
@@ -331,13 +339,14 @@ def get_gen(name, gen, argstype="flag"):
             generator = mygen
             debug(f"generator {name}")
 
-basics = {"sine": Sine, "saw": Saw, "square": Square, "tri": Triangle}
-for name in basics:
-    get_gen(name, basics[name])
-get_gen("wave", GenWave, argstype="string")
-get_gen("fm", GenFM, argstype="list")
-if generator is None:
-    generator = GenFM()
+#basics = {"saw": Saw, "sine": Sine, "square": Square, "tri": Triangle}
+#for name in basics:
+#    get_gen(name, basics[name])
+#get_gen("wave", GenWave, argstype="string")
+#get_gen("fm", GenFM, argstype="list")
+#if generator is None:
+#    generator = GenFM()
+generator = Saw
 
 # Global sample clock, indicating the number of samples
 # played since synthesizer start (excluding underruns).
@@ -552,58 +561,61 @@ class Note(object):
             velocity = 1.0
         self.release_length = s_release * (1.05 - velocity)
 
-    def envelope(self):
-        """Return the envelope for the given note at the given time.
-        Returns None when note should be dropped."""
+    def envelope(self, n = 1):
+        """Return the envelope for n samples from the given note at
+        the given time.  Returns None when note should be
+        dropped."""
         t = self.t
+        times = np.linspace(
+            t,
+            t + n,
+            num = n,
+            endpoint = False,
+            dtype = np.float64,
+        )
         if self.release_time != None:
-            rt = t - self.release_time
-            if rt >= self.release_length:
+            rt = times - self.release_time
+            if rt[-1] >= self.release_length:
                 return None
             return 1.0 - rt / self.release_length
-        if t < s_attack:
-            return t / s_attack
-        return 1.0
+        if times[-1] < s_attack:
+            return times / s_attack
+        return np.ones(n, dtype = np.float64)
 
-    def sample(self):
-        """Return the next sample for this key."""
-        sample = self.gen.sample(self.t)
-        self.t += 1
-        return self.velocity * sample
+    def samples(self, n = 1):
+        """Return the next n samples for this key."""
+        samples = self.gen.samples(self.t, n = n)
+        self.t += n
+        return self.velocity * samples
 
-def clamp(v, c):
-    """Clamp a value v to +- c."""
-    return min(max(v, -c), c)
-
-def mix():
-    """Accumulate a composite sample from the active generators."""
+def mix(n = 1):
+    """Accumulate n composite samples from the active generators."""
     # Gather samples and count notes.
-    s = 0
-    n = 0
+    s = np.zeros(n, dtype=np.float64)
+    n_notes = 0
     for note in set(notemap):
         e = note.envelope()
         if e == None:
             # Release is complete. Get rid of the note.
             notemap.remove(note)
             continue
-        s += e * note.sample()
-        n += 1
+        s += e * note.samples(n = n)
+        n_notes += 1
 
     # Do gain adjustments based on number of playing notes.
-    if n == 0:
-        return 0
-    return control_volume.value() * s / max(n, compression)
+    if n_notes == 0:
+        return np.array([0] * n)
+    return control_volume.value() * s / max(n_notes, compression)
 
 def callback(in_data, frame_count, time_info, status):
     """Supply frames to PortAudio."""
     if debugging and status != 0:
         print("cb", status)
     # Get frames of waveform.
+    frames = mix(n = frame_count)
+    data = np.clip(32767 * frames, -32767, 32767).astype(np.int16)
     global sample_clock
-    data = []
-    for i in range(frame_count):
-        data.append(clamp(int(32767.0 * mix()), 32767))
-        sample_clock += 1
+    sample_clock += frame_count
     # Get the frames into the right format for PA.
     frames = bytes(array.array('h', data))
     # Return frames and continue signal.
