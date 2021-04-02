@@ -596,6 +596,8 @@ def mix():
 
 def callback(in_data, frame_count, time_info, status):
     """Supply frames to PortAudio."""
+    if debugging and status != 0:
+        print("cb", status)
     # Get frames of waveform.
     global sample_clock
     data = []
