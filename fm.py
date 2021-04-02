@@ -308,6 +308,13 @@ ap.add_argument(
     metavar="BASE",
 )
 ap.add_argument(
+    "-b", "--buffer-size",
+    help="Sample buffer size",
+    type=int,
+    default=256,
+    metavar="SAMPLES",
+)
+ap.add_argument(
     "-d", "--debug",
     help="Print debugging messages",
     action="store_true",
@@ -641,7 +648,7 @@ stream = pa.open(
     rate=48000,
     output=True,
     stream_callback=callback,
-    frames_per_buffer=1024,
+    frames_per_buffer=args.buffer_size,
 )
 
 # Process key events and modify the PA play freq.
