@@ -50,7 +50,7 @@ class Saw(object):
     """Sawtooth VCO."""
     def __init__(self, f):
         """Make a new sawtooth generator."""
-        self.tmod = rate / f
+        self.tmul = f / rate
 
     def samples(self, t, tv = 0.0, n = 1):
         """Return the next n samples from this generator."""
@@ -61,13 +61,15 @@ class Saw(object):
             endpoint = False,
             dtype = np.float64,
         )
-        return 2.0 * ((times % self.tmod) / self.tmod) - 1.0
+        # https://en.wikipedia.org/wiki/Sawtooth_wave
+        a = self.tmul * times
+        return 2.0 * (a - np.floor(0.5 + a))
 
 class Triangle(object):
     """Triangle VCO."""
     def __init__(self, f):
         """Make a new triangle generator."""
-        self.tdiv = rate / f
+        self.tmul = f / rate
 
     def samples(self, t, tv = 0.0, n = 1):
         """Return the next n samples from this generator."""
@@ -79,7 +81,7 @@ class Triangle(object):
             dtype = np.float64,
         )
         # https://en.wikipedia.org/wiki/Triangle_wave
-        a = times / self.tdiv
+        a = times * self.tmul
         return 2.0 * np.abs(2.0 * (a - np.floor(a + 0.5))) - 1.0
 
 class Sine(object):
@@ -99,18 +101,26 @@ class Sine(object):
         )
         return np.sin(times * self.period)
 
-#
-#class Square(object):
-#    """Square VCO."""
-#    def __init__(self, f):
-#        """Make a new square generator."""
-#        self.tmod = rate / f
-#        self.half = self.tmod / 2.0
-#
-#    def sample(self, t, tv = 0.0):
-#        """Return the next sample from this generator."""
-#        return 2.0 * int(((t + tv + self.tmod) % self.tmod) > self.half) - 1.0
-#
+
+class Square(object):
+    """Square VCO."""
+    def __init__(self, f):
+        """Make a new square generator."""
+        self.tmul = f / rate
+
+    def samples(self, t, tv = 0.0, n = 1):
+        """Return the next n samples from this generator."""
+        times = np.linspace(
+            t + tv,
+            t + tv + n,
+            num = n,
+            endpoint = False,
+            dtype = np.float64,
+        )
+        # https://en.wikipedia.org/wiki/Square_wave
+        a = self.tmul * times
+        return 2.0 * (2.0 * np.floor(a) - np.floor(2.0 * a)) + 1.0
+
 #class FM(object):
 #    """FM VCO."""
 #    def __init__(self, f, fmod, amod):
@@ -351,8 +361,7 @@ def get_gen(name, gen, argstype="flag"):
             generator = mygen
             debug(f"generator {name}")
 
-#basics = {"square": Square}
-basics = {"saw": Saw, "sine": Sine, "tri": Triangle}
+basics = {"saw": Saw, "sine": Sine, "square": Square, "tri": Triangle}
 for name in basics:
     get_gen(name, basics[name])
 #get_gen("wave", GenWave, argstype="string")
