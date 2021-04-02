@@ -136,23 +136,25 @@ class GenFM(object):
     def __call__(self, f):
         return FM(f, fmod=self.fmod, amod=self.amod)
 
-#class Wave(object):
-#    """Wavetable VCO"""
-#    def __init__(self, wavetable, f0, f):
-#        self.step = f / f0
-#        self.wavetable = wavetable
-#        self.nwavetable = len(wavetable)
-#
-#    def sample(self, t, tv = None):
-#        """Return the next sample from this generator."""
-#        assert tv is None
-#        # XXX Should antialias
-#        t0 = (self.step * t) % self.nwavetable
-#        i = int(t0)
-#        frac = t0 % 1.0
-#        x0 = self.wavetable[i]
-#        x1 = self.wavetable[(i + 1) % self.nwavetable]
-#        return x0 * frac + x1 * (1.0 - frac)
+class Wave(object):
+    """Wavetable VCO"""
+    def __init__(self, wavetable, f0, f):
+        self.step = f / f0
+        self.wavetable = wavetable
+        self.nwavetable = len(wavetable)
+
+    def samples(self, t, tv = None, n = 1):
+        """Return the next n samples from this generator."""
+        times = make_times(t, tv, n)
+        # XXX Should antialias
+        t0 = (self.step * times) % self.nwavetable
+        int_part = np.floor(t0)
+        frac_part = t0 - int_part
+        i0 = int_part.astype(int)
+        i1 = (i0 + 1) % self.nwavetable
+        x0 = self.wavetable[i0]
+        x1 = self.wavetable[i1]
+        return x0 * frac_part + x1 * (1.0 - frac_part)
 
 def read_wave(filename):
     """Read samples from a wave file."""
@@ -354,7 +356,7 @@ basics = {"saw": Saw, "sine": Sine, "square": Square, "tri": Triangle}
 for name in basics:
     get_gen(name, basics[name])
 get_gen("fm", GenFM, argstype="list")
-#get_gen("wave", GenWave, argstype="string")
+get_gen("wave", GenWave, argstype="string")
 if generator is None:
     generator = GenFM()
 
