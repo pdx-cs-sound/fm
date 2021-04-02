@@ -60,6 +60,14 @@ A small selection of sounds can be chosen from the command line.
   treated as a loop. The envelope will be derived from the
   built-in envelope generator.
 
+  A couple of sample wave files have been included to get
+  started:
+
+  * `voice-long.wav`: The author singing something vaguely
+    like a 440 A
+
+  * `car-horn.wav`: The author's car horn
+
 ### Tuning
 
 [Five-limit Just intonation](https://en.wikipedia.org/wiki/Just_intonation#Five-limit_tuning)
