@@ -616,7 +616,9 @@ stream = pa.open(
     channels=1,
     rate=48000,
     output=True,
-    stream_callback=callback)
+    stream_callback=callback,
+    frames_per_buffer=1024,
+)
 
 # Process key events and modify the PA play freq.
 while True:
