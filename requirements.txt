@@ -1,0 +1,5 @@
+python-rtmidi
+mido
+pyaudio
+numpy
+toml

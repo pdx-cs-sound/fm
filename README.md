@@ -17,7 +17,11 @@ out-of-the-box:
 Prerequisites for this program are Python 3, PyAudio, Mido,
 NumPy and TOML. `pyaudio`, `mido`, `numpy` and `toml` can be
 installed using `pip3`. Note that `mido` requires
-`python-rtmidi`: `rtmidi` won't work.
+`python-rtmidi`: `rtmidi` won't work, so make sure it is not
+installed. Then you can install the remaining dependencies
+with
+
+    pip3 install -r requirements.txt
 
 To run the program, say `python3 fm.py`.
 
