@@ -46,21 +46,28 @@ def debug(*args, **kwargs):
 # and the keymap forgets the note so that it can be played
 # again.
 
+def make_times(t, tv, n):
+    """Return a sequence of n time points for wave sampling."""
+    times = np.linspace(
+        t,
+        t + n,
+        num = n,
+        endpoint = False,
+        dtype = np.float64,
+    )
+    if tv is not None:
+        times += tv
+    return times
+
 class Saw(object):
     """Sawtooth VCO."""
     def __init__(self, f):
         """Make a new sawtooth generator."""
         self.tmul = f / rate
 
-    def samples(self, t, tv = 0.0, n = 1):
+    def samples(self, t, tv = None, n = 1):
         """Return the next n samples from this generator."""
-        times = np.linspace(
-            t + tv,
-            t + tv + n,
-            num = n,
-            endpoint = False,
-            dtype = np.float64,
-        )
+        times = make_times(t, tv, n)
         # https://en.wikipedia.org/wiki/Sawtooth_wave
         a = self.tmul * times
         return 2.0 * (a - np.floor(0.5 + a))
@@ -71,15 +78,9 @@ class Triangle(object):
         """Make a new triangle generator."""
         self.tmul = f / rate
 
-    def samples(self, t, tv = 0.0, n = 1):
+    def samples(self, t, tv = None, n = 1):
         """Return the next n samples from this generator."""
-        times = np.linspace(
-            t + tv,
-            t + tv + n,
-            num = n,
-            endpoint = False,
-            dtype = np.float64,
-        )
+        times = make_times(t, tv, n)
         # https://en.wikipedia.org/wiki/Triangle_wave
         a = times * self.tmul
         return 2.0 * np.abs(2.0 * (a - np.floor(a + 0.5))) - 1.0
@@ -90,15 +91,9 @@ class Sine(object):
         """Make a new sine generator."""
         self.period = 2 * math.pi * f / rate
 
-    def samples(self, t, tv = 0.0, n = 1):
+    def samples(self, t, tv = None, n = 1):
         """Return the next n samples from this generator."""
-        times = np.linspace(
-            t + tv,
-            t + tv + n,
-            num = n,
-            endpoint = False,
-            dtype = np.float64,
-        )
+        times = make_times(t, tv, n)
         return np.sin(times * self.period)
 
 
@@ -108,15 +103,9 @@ class Square(object):
         """Make a new square generator."""
         self.tmul = f / rate
 
-    def samples(self, t, tv = 0.0, n = 1):
+    def samples(self, t, tv = None, n = 1):
         """Return the next n samples from this generator."""
-        times = np.linspace(
-            t + tv,
-            t + tv + n,
-            num = n,
-            endpoint = False,
-            dtype = np.float64,
-        )
+        times = make_times(t, tv, n)
         # https://en.wikipedia.org/wiki/Square_wave
         a = self.tmul * times
         return 2.0 * (2.0 * np.floor(a) - np.floor(2.0 * a)) + 1.0
@@ -131,8 +120,8 @@ class Square(object):
 #        self.lfo = Sine(f + fmod)
 #        self.amod = amod
 #
-#    def sample(self, t, tv = 0.0):
-#        """Return the next sample from this generator."""
+#    def samples(self, t, tv = None, n = 1):
+#        """Return the next n samples from this generator."""
 #        depth = control_modwheel.value()
 #        tmod = self.amod * depth * self.lfo.sample(t, tv=tv)
 #        return self.sine.sample(t, tv=tmod)
@@ -146,7 +135,7 @@ class Square(object):
 #
 #    def __call__(self, f):
 #        return FM(f, fmod=self.fmod, amod=self.amod)
-#
+
 #class Wave(object):
 #    """Wavetable VCO"""
 #    def __init__(self, wavetable, f0, f):
