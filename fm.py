@@ -76,17 +76,24 @@ class Saw(object):
 #            return 4.0 * frac - 1.0
 #        else:
 #            return 4.0 * (1.0 - frac) - 1.0
-#
-#class Sine(object):
-#    """Sine VCO."""
-#    def __init__(self, f):
-#        """Make a new sine generator."""
-#        self.period = 2 * math.pi * f / rate
-#
-#    def sample(self, t, tv = 0.0):
-#        """Return the next sample from this generator."""
-#        return math.sin((t + tv) * self.period)
-#
+
+class Sine(object):
+    """Sine VCO."""
+    def __init__(self, f):
+        """Make a new sine generator."""
+        self.period = 2 * math.pi * f / rate
+
+    def samples(self, t, tv = 0.0, n = 1):
+        """Return the next n samples from this generator."""
+        times = np.linspace(
+            t + tv,
+            t + tv + n,
+            num = n,
+            endpoint = False,
+            dtype = np.float64,
+        )
+        return np.sin(times * self.period)
+
 #
 #class Square(object):
 #    """Square VCO."""
@@ -340,13 +347,13 @@ def get_gen(name, gen, argstype="flag"):
             debug(f"generator {name}")
 
 #basics = {"saw": Saw, "sine": Sine, "square": Square, "tri": Triangle}
-#for name in basics:
-#    get_gen(name, basics[name])
+basics = {"saw": Saw, "sine": Sine}
+for name in basics:
+    get_gen(name, basics[name])
 #get_gen("wave", GenWave, argstype="string")
 #get_gen("fm", GenFM, argstype="list")
-#if generator is None:
-#    generator = GenFM()
-generator = Saw
+if generator is None:
+    generator = Saw
 
 # Global sample clock, indicating the number of samples
 # played since synthesizer start (excluding underruns).
