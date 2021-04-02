@@ -63,19 +63,24 @@ class Saw(object):
         )
         return 2.0 * ((times % self.tmod) / self.tmod) - 1.0
 
-#class Triangle(object):
-#    """Triangle VCO."""
-#    def __init__(self, f):
-#        """Make a new triangle generator."""
-#        self.tmod = rate / f
-#
-#    def sample(self, t, tv = 0.0):
-#        """Return the next sample from this generator."""
-#        frac = ((t + tv + self.tmod) % self.tmod) / self.tmod
-#        if frac <= 0.5:
-#            return 4.0 * frac - 1.0
-#        else:
-#            return 4.0 * (1.0 - frac) - 1.0
+class Triangle(object):
+    """Triangle VCO."""
+    def __init__(self, f):
+        """Make a new triangle generator."""
+        self.tdiv = rate / f
+
+    def samples(self, t, tv = 0.0, n = 1):
+        """Return the next n samples from this generator."""
+        times = np.linspace(
+            t + tv,
+            t + tv + n,
+            num = n,
+            endpoint = False,
+            dtype = np.float64,
+        )
+        # https://en.wikipedia.org/wiki/Triangle_wave
+        a = times / self.tdiv
+        return 2.0 * np.abs(2.0 * (a - np.floor(a + 0.5))) - 1.0
 
 class Sine(object):
     """Sine VCO."""
@@ -346,8 +351,8 @@ def get_gen(name, gen, argstype="flag"):
             generator = mygen
             debug(f"generator {name}")
 
-#basics = {"saw": Saw, "sine": Sine, "square": Square, "tri": Triangle}
-basics = {"saw": Saw, "sine": Sine}
+#basics = {"square": Square}
+basics = {"saw": Saw, "sine": Sine, "tri": Triangle}
 for name in basics:
     get_gen(name, basics[name])
 #get_gen("wave", GenWave, argstype="string")
