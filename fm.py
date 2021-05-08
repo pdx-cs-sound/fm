@@ -279,7 +279,7 @@ ap.add_argument(
 )
 ap.add_argument(
     "--tri", "--triangle",
-    help="Use sawtooth wave generator",
+    help="Use triangle wave generator",
     action="store_true",
 )
 ap.add_argument(
