@@ -505,14 +505,6 @@ keymap = dict()
 # Note map contains currently-playing notes.
 notemap = set()
 
-# Attack time in secs and samples for AR envelope.
-t_attack = 0.010
-s_attack = int(rate * t_attack)
-
-# Release time in secs and samples for AR envelope.
-t_release = 0.01
-s_release = int(rate * t_release)
-
 just_ratios = [
     1, 16/15, 9/8, 6/5, 5/4, 4/3, 45/32, 3/2, 8/5, 5/3, 9/5, 15/8,
 ]
@@ -562,50 +554,138 @@ key_freq = [key_to_freq(key) for key in range(128)]
 #     for i, f in enumerate(key_freq):
 #         debug(f"key {i} = {f}")
 
+# It turns out that managing an envelope is hard.
+# This design is my third, and may yet change.
+
+class Envelope(object):
+    """
+    ADSR envelope:
+    * The envelope is represented by a list of coordinates (a, d).
+      * a is an amplitude 0..1
+      * d is a duration over which the envelope will
+        move linearly from its starting value to a.
+
+    * The envelope will implicitly start at 0 amplitude.
+
+    * The last coordinate must have amplitude 0: the envelope
+      must finish at 0 amplitude.
+
+    * There is an explicit sustain time stored in the envelope.
+      The envelope clock will "hold" at that time until release.
+      The sustain time must not be later than the end of the envelope.
+
+    * There is an explicit early release duration stored in the
+      envelope.  If release is early (before the sustain time),
+      it will linearly interpolate toward the sustain point over
+      this duration, then complete the release.
+    """
+
+    def __init__(self, epoints, sustain_time, early_release_duration):
+        """Create an envelope with the given parameters. See the class
+        documentation for details."""
+        # Assemble and check envelope.
+        assert epoints[-1][0] == 0
+        # Convert envelope durations to samples.
+        epoints = map(lambda (a, d): (a, int(d * rate)), epoints)
+        # Convert the envelope to an array of sample amplitudes
+        # by linear interpolation.
+        envelope = np.array([], dtype=np.float64)
+        t = 0
+        a0 = 0
+        for (a1, d) in epoints:
+            if d == 0:
+                a0 = a1
+                continue
+            samples = np.linspace(a0, a1, d, dtype=np.float64)
+            envelope = np.append(envelope, samples)
+            a0 = a1
+            t += d
+        self.env = envelope
+
+        # Finish time (adjusted note clock) in samples.
+        self.t_done = len(envelope)
+        # Sustain time (adjusted note clock) in samples.
+        self.t_sus = int(sustain_time * rate)
+        assert self.t_sus <= self.t_done
+        # Sustain phase: 0 = pre, 1 = in, 2 = past
+        self.sus_phase = 0
+        # Early release base duration in samples.
+        # Will be modified by release velocity.
+        self.d_rel = int(early_release_duration * rate)
+        # Time offset from note clock in samples.
+        # Will go negative during sustain and/or at early release.
+        self.t_off = 0
+
+    def release(self, t, velocity):
+        """Release the envelope with the given velocity."""
+        if self.sus_phase >= 1:
+            self.sus_phase = 2
+            return
+        if velocity == 0.0:
+            velocity = 1.0
+        # Lightest release doubles release duration.
+        d = int(self.d_rel * (2.0 - velocity))
+        # Bodge up the state to play out the release envelope.
+        env = self.env
+        t_sus = self.t_sus
+        a0 = env[t]
+        a1 = env[t_sus]
+        env_rel = np.linspace(a0, a1, d, dtype=np.float64)
+        env = np.append(env_rel, env[t_sus:])
+        self.env = env
+        self.t_off = -t
+        self.t_done = len(env)
+        self.sus_phase = 2
+
+    def samples(self, t, n = 1):
+        """Return the next n samples from this envelope,
+        zero-padding as needed.  Return None when no samples
+        remain."""
+        t += self.t_off
+        if t >= self.t_done:
+            return None
+        env = self.env
+        phase = self.sus_phase
+        if phase == 2:
+            # Handle release case.
+        elif phase == 0:
+            # Handle case where samples need to be played out
+            # and key is not yet released or sustaining.
+            t_sus = self.t_sus
+            if t + n < t_sus:
+                return
+        assert phase == 1
+        # Handle sustaining case.
+        self.t_off -= n
+        # pad = np.full(npad, pad_value, dtype=np.float64)
+
+t_adsr = [(1, 0.1), (0.8, 0.1), (0.2, 1), (0, 0.1)]
+t_sustain = 0.2
+d_release = 0.3
+
 class Note(object):
     """Note generator with envelope processing."""
     def __init__(self, key, velocity, gen):
         """Make a new note with envelope."""
-        self.t = 0
         self.key = key
         self.velocity = velocity
-        self.release_time = None
-        self.release_length = None
         self.gen = gen(key_freq[key])
+        self.adsr = Envelope(t_adsr, t_sustain, d_release)
+        self.t = 0
 
     def off(self, velocity):
-        """Note is turned off. Start release."""
-        self.release_time = self.t
-        if velocity == 0.0:
-            velocity = 1.0
-        self.release_length = s_release * (1.05 - velocity)
-
-    def envelope(self, n = 1):
-        """Return the envelope for n samples from the given note at
-        the given time.  Returns None when note should be
-        dropped."""
-        t = self.t
-        times = np.linspace(
-            t,
-            t + n,
-            num = n,
-            endpoint = False,
-            dtype = np.float64,
-        )
-        if self.release_time != None:
-            rt = times - self.release_time
-            if rt[-1] >= self.release_length:
-                return None
-            return 1.0 - rt / self.release_length
-        if times[-1] < s_attack:
-            return times / s_attack
-        return np.ones(n, dtype = np.float64)
+        """Note is turned off by key release. Start release."""
+        self.adsr.release(self.t, velocity)
 
     def samples(self, n = 1):
         """Return the next n samples for this key."""
+        envelope = self.adsr.samples(self.t, n = n)
+        if envelope is None:
+            print("drop")
+            return None
         samples = self.gen.samples(self.t, n = n)
         self.t += n
-        return self.velocity * samples
+        return self.velocity * samples * envelope
 
 def mix(n = 1):
     """Accumulate n composite samples from the active generators."""
@@ -613,12 +693,11 @@ def mix(n = 1):
     s = np.zeros(n, dtype=np.float64)
     n_notes = 0
     for note in set(notemap):
-        e = note.envelope()
-        if e == None:
+        samples = note.samples(n = n)
+        if samples is None:
             # Release is complete. Get rid of the note.
             notemap.remove(note)
             continue
-        s += e * note.samples(n = n)
         n_notes += 1
 
     # Do gain adjustments based on number of playing notes.
