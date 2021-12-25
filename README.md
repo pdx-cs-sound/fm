@@ -25,6 +25,41 @@ with
 
 To run the program, say `python3 fm.py`.
 
+### Audio System
+
+This synth uses
+[PyAudio](https://people.csail.mit.edu/hubert/pyaudio/), a
+Python wrapper for
+[PortAudio](http://www.portaudio.com/). In principle this
+means that it is portable to Mac and Windows: so far I have
+only tested it on Linux.
+
+PyAudio on Linux seems to prefer ALSA over JACK by
+default. This would be easy to change: I had the code in at
+one point but decided it was a bad idea. JACK treats
+one-channel audio as left channel instead of mono, which is
+kind of annoying for now. Once stereo is in, I may again
+make the synth prefer JACK. In any case, if you hear only a
+left channel on Linux, you're probably hearing JACK.
+
+When I say PyAudio on Linux prefers ALSA, what I mean is
+that it will choose to try to peacefully share ALSA with
+PulseAudio if you are running that, or use the ALSA library
+emulation of [PipeWire](https://pipewire.org/) if you are
+running that. I highly recommend PipeWire in general: it's
+what I'm using. For this synth it probably doesn't make a
+difference which you choose, but note that PipeWire's ALSA
+stuff doesn't report underruns yet.
+
+One last note: if you find extremely high latency, the first
+thing you might look at is what you're playing through. More
+than once I've spent a bunch of time trying to track down a
+latency issue, only to remember that the latency of the HDMI
+audio on the TV I use as a default monitor is seemingly
+100ms or so. On my reasonable desktop box, I'm able to run
+with a buffer size of 48 samples at 48KHz with no overruns,
+so roughly 1ms of "extra" latency in path.
+
 ### MIDI Keyboard
 
 By default the synth will wait to be connected to a keyboard
@@ -35,7 +70,8 @@ If you want to use a
 [TOML](https://en.wikipedia.org/wiki/TOML) keyboard
 configuration file say `python3 fm.py -K` _conffile_.
 Example keyboard configurations are provided for the M-Audio
-Oxygen 8 and Line 6 Mobile Keys 49.
+Oxygen 8 and Line 6 Mobile Keys 49. This will connect
+to the first-found appropriately named keyboard.
 
 If you just want to connect to a named keyboard (found by
 `aconnect -o` on Linux) say `python3 fm.py -k` _keyboard_.
@@ -106,20 +142,18 @@ would have done that. Sue me.)
 * [ ] Extend the fixed linear attack-release (AR) envelope,
   to full ADSR and make configurable. Seperate envelopes
   should be able to be applied to separate operators where
-  this makes sense.
+  this makes sense. *(In progress.)*
 
 * [ ] Add a VCF.
 
 * [ ] Add a synthesizer config file to set sound parameters,
-  control mappings and program assignments.
+  control mappings and program assignments. *(In progress.)*
 
 * [ ] Allow synthesizer config to have a flowgraph to
   combine generators.
 
 * [ ] Provide better multiple simultaneous controller
   support via MIDI channels.
-
-* [ ] Support JACK MIDI (?).
 
 * [ ] Do stereo.
 

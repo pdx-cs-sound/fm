@@ -13,7 +13,7 @@ rate = 48000
 # to inhibit clipping.
 compression = 5
 
-import argparse, array, math, mido, pyaudio, toml, sys, wave
+import argparse, math, mido, pyaudio, toml, sys, wave
 import numpy as np
 import numpy.fft as fft
 
@@ -53,7 +53,7 @@ def make_times(t, tv, n):
         t + n,
         num = n,
         endpoint = False,
-        dtype = np.float64,
+        dtype = np.float32,
     )
     if tv is not None:
         times += tv
@@ -174,7 +174,7 @@ def read_wave(filename):
         if info.framerate != rate:
             raise IOException(f"wave file frame rate must be {rate}")
         sampletype, sampleoff, samplewidth = sampletypes[info.sampwidth]
-        samples = np.frombuffer(fbytes, dtype=sampletype).astype(np.float64)
+        samples = np.frombuffer(fbytes, dtype=sampletype).astype(np.float32)
         scale = 2.0 / samplewidth
         fsamples = scale * (samples + sampleoff)
         return samples
@@ -311,7 +311,21 @@ ap.add_argument(
     "-b", "--buffer-size",
     help="Sample buffer size",
     type=int,
-    default=256,
+    default=48,
+    metavar="SAMPLES",
+)
+ap.add_argument(
+    "--t-attack",
+    help="Attack time",
+    type=float,
+    default=0.003,
+    metavar="SAMPLES",
+)
+ap.add_argument(
+    "--t-release",
+    help="Release time",
+    type=float,
+    default=0.003,
     metavar="SAMPLES",
 )
 ap.add_argument(
@@ -506,11 +520,11 @@ keymap = dict()
 notemap = set()
 
 # Attack time in secs and samples for AR envelope.
-t_attack = 0.010
+t_attack = args.t_attack
 s_attack = int(rate * t_attack)
 
 # Release time in secs and samples for AR envelope.
-t_release = 0.01
+t_release = args.t_release
 s_release = int(rate * t_release)
 
 just_ratios = [
@@ -578,7 +592,7 @@ class Note(object):
         self.release_time = self.t
         if velocity == 0.0:
             velocity = 1.0
-        self.release_length = s_release * (1.05 - velocity)
+        self.release_length = s_release * (1.0 - 0.5 * velocity)
 
     def envelope(self, n = 1):
         """Return the envelope for n samples from the given note at
@@ -590,7 +604,7 @@ class Note(object):
             t + n,
             num = n,
             endpoint = False,
-            dtype = np.float64,
+            dtype = np.float32,
         )
         if self.release_time != None:
             rt = times - self.release_time
@@ -599,7 +613,7 @@ class Note(object):
             return 1.0 - rt / self.release_length
         if times[-1] < s_attack:
             return times / s_attack
-        return np.ones(n, dtype = np.float64)
+        return np.ones(n, dtype = np.float32)
 
     def samples(self, n = 1):
         """Return the next n samples for this key."""
@@ -610,7 +624,7 @@ class Note(object):
 def mix(n = 1):
     """Accumulate n composite samples from the active generators."""
     # Gather samples and count notes.
-    s = np.zeros(n, dtype=np.float64)
+    s = np.zeros(n, dtype=np.float32)
     n_notes = 0
     for note in set(notemap):
         e = note.envelope()
@@ -632,18 +646,19 @@ def callback(in_data, frame_count, time_info, status):
         print("cb", status)
     # Get frames of waveform.
     frames = mix(n = frame_count)
-    data = np.clip(32767 * frames, -32767, 32767).astype(np.int16)
+    data = 0.5 * frames
+    assert max(data) <= 1.0 and min(data) >= -1.0
     global sample_clock
     sample_clock += frame_count
     # Get the frames into the right format for PA.
-    frames = bytes(array.array('h', data))
+    frames = bytes(data)
     # Return frames and continue signal.
     return (frames, pyaudio.paContinue)
 
 # Set up the audio output stream.
 pa = pyaudio.PyAudio()
 stream = pa.open(
-    format=pa.get_format_from_width(2),
+    format=pa.get_format_from_width(4),
     channels=1,
     rate=48000,
     output=True,
