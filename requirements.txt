@@ -1,5 +1,5 @@
 python-rtmidi
 mido
-pyaudio
+sounddevice
 numpy
 toml

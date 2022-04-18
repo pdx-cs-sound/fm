@@ -13,7 +13,7 @@ rate = 48000
 # to inhibit clipping.
 compression = 5
 
-import argparse, math, mido, pyaudio, toml, sys, wave
+import argparse, array, math, mido, sounddevice, toml, sys, wave
 import numpy as np
 import numpy.fft as fft
 
@@ -640,31 +640,26 @@ def mix(n = 1):
         return np.array([0] * n)
     return control_volume.value() * s / max(n_notes, compression)
 
-def callback(in_data, frame_count, time_info, status):
+def callback(out_data, frame_count, time_info, status):
     """Supply frames to PortAudio."""
     if debugging and status != 0:
         print("cb", status)
     # Get frames of waveform.
     frames = mix(n = frame_count)
-    data = 0.5 * frames
-    assert max(data) <= 1.0 and min(data) >= -1.0
+    # Adjust the sample clock.
     global sample_clock
     sample_clock += frame_count
-    # Get the frames into the right format for PA.
-    frames = bytes(data)
     # Return frames and continue signal.
-    return (frames, pyaudio.paContinue)
+    out_data[:] = np.reshape(frames, (frame_count, 1))
 
 # Set up the audio output stream.
-pa = pyaudio.PyAudio()
-stream = pa.open(
-    format=pa.get_format_from_width(4),
+stream = sounddevice.OutputStream(
+    samplerate=48000,
     channels=1,
-    rate=48000,
-    output=True,
-    stream_callback=callback,
-    frames_per_buffer=args.buffer_size,
+    blocksize=args.buffer_size,
+    callback=callback,
 )
+stream.start()
 
 # Process key events and modify the PA play freq.
 while True:
@@ -711,5 +706,5 @@ for key in set(keymap):
     keymap[key].off(1.0)
     del keymap[key]
 notemap = set()
-stream.stop_stream()
+stream.stop()
 stream.close()
