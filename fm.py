@@ -316,16 +316,30 @@ ap.add_argument(
 )
 ap.add_argument(
     "--t-attack",
-    help="Attack time",
+    help="Attack time in msecs",
     type=float,
-    default=0.003,
+    default=30,
+    metavar="SAMPLES",
+)
+ap.add_argument(
+    "--t-decay",
+    help="Decay time in msecs",
+    type=float,
+    default=30,
+    metavar="SAMPLES",
+)
+ap.add_argument(
+    "--a-sustain",
+    help="Sustain level as fraction",
+    type=float,
+    default=0.8,
     metavar="SAMPLES",
 )
 ap.add_argument(
     "--t-release",
-    help="Release time",
+    help="Release time in msecs",
     type=float,
-    default=0.003,
+    default=30,
     metavar="SAMPLES",
 )
 ap.add_argument(
@@ -519,13 +533,15 @@ keymap = dict()
 # Note map contains currently-playing notes.
 notemap = set()
 
-# Attack time in secs and samples for AR envelope.
-t_attack = args.t_attack
-s_attack = int(rate * t_attack)
-
-# Release time in secs and samples for AR envelope.
-t_release = args.t_release
-s_release = int(rate * t_release)
+class ADSR(object):
+    """Attack-Decay-Sustain-Release envelope."""
+    def __init__(self, attack=30, decay=30, sustain=0.8, release=30):
+        """Make a new ADSR envelope. attack, decay, release are in ms.
+        Sustain is fraction of full volume."""
+        self.attack = int(attack * 0.001 * rate)
+        self.decay = int(decay * 0.001 * rate)
+        self.sustain = sustain
+        self.release = int(release * 0.001 * rate)
 
 just_ratios = [
     1, 16/15, 9/8, 6/5, 5/4, 4/3, 45/32, 3/2, 8/5, 5/3, 9/5, 15/8,
@@ -583,38 +599,79 @@ class Note(object):
         self.t = 0
         self.key = key
         self.velocity = velocity
+        self.gen = gen(key_freq[key])
         self.release_time = None
         self.release_length = None
-        self.gen = gen(key_freq[key])
+        self.env = ADSR(
+            attack = args.t_attack,
+            decay = args.t_decay,
+            sustain = args.a_sustain,
+            release = args.t_release,
+        )
+
 
     def off(self, velocity):
         """Note is turned off. Start release."""
         self.release_time = self.t
         if velocity == 0.0:
             velocity = 1.0
-        self.release_length = s_release * (1.0 - 0.5 * velocity)
+        self.release_length = int(self.env.release * (1.0 - 0.5 * velocity))
 
     def envelope(self, n = 1):
         """Return the envelope for n samples from the given note at
         the given time.  Returns None when note should be
         dropped."""
         t = self.t
-        times = np.linspace(
-            t,
-            t + n,
-            num = n,
-            endpoint = False,
-            dtype = np.float32,
-        )
-        if self.release_time != None:
-            rt = times - self.release_time
-            if rt[-1] >= self.release_length:
+        rt = self.release_time
+        if rt is not None:
+            # Release is special.
+            rl = self.release_length
+            sus = self.env.sustain
+            end = rt + rl
+            # 0...a...d......rt..t..end
+            if t >= end:
                 return None
-            return 1.0 - rt / self.release_length
-        if times[-1] < s_attack:
-            return times / s_attack
-        return np.ones(n, dtype = np.float32)
-
+            m = min(n, end - t)
+            levels = np.linspace(
+                sus * (end - t) / rl,
+                sus * (end - t + m) / rl,
+                num = m,
+                endpoint = False,
+                dtype = np.float32,
+            )
+            if m < n:
+                np.append(times, np.zeros(m - n))
+            return levels
+        # Piece together attack, decay, sustain.
+        a = self.env.attack
+        times = np.array(dtype=np.float32)
+        if t < at:
+            # Attack.
+            # 0...a...d...
+            m = min(a - t, n)
+            alevels = np.linspace(
+                t / a,
+                (t + m) / a,
+                num = m,
+                endpoint = False,
+                dtype = np.float32,
+            )
+            times.append(alevels)
+            t += m
+        # XXX HERE
+        d = self.env.decay
+        if len(times) < n and t < a + d:
+            # Decay.
+            # ..a...d...
+            m = min(a + d - t, n)
+            alevels = np.linspace(
+                t / a,
+                (t + m) / a,
+                num = m,
+                endpoint = False,
+                dtype = np.float32,
+            )
+                
     def samples(self, n = 1):
         """Return the next n samples for this key."""
         samples = self.gen.samples(self.t, n = n)
