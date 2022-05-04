@@ -118,11 +118,17 @@ between 4♯/5♭ is split close to the mean ratio
 (1.41421:1). (Yes, this is a poke at Pythagoreans, who never
 would have done that. Sue me.)
 
+### Envelope
+
+There is a full ADSR envelope. It is global and applied to
+all keys. The defaults are reasonable. The envelope can be
+configured from the command line.
+
 ## Status
 
-* [x] The keyboard by default tried to listen for a MIDI
-  keyboard connection, behaving as a MIDI output
-  device. This may not work on Windows or Mac, and is
+* [x] The instrument by default tries to listen for a MIDI
+  keyboard connection established by manual connection. This
+  might not work on Windows or Mac, and is
   inconvenient. Added a command-line keyboard argument and a
   config file to use a particular keyboard and its
   controllers.
@@ -133,16 +139,17 @@ would have done that. Sue me.)
   only by editing the source. Added command-line generator
   argument handling.
 
-* [x] Support alternate tunings.
+* [x] Supported alternate tunings.
+
+* [x] Extended the fixed linear attack-release (AR) envelope,
+  to full ADSR and make configurable.
 
 * [ ] Support other MIDI control messages, particularly
   pitch wheel, mod wheel, sustain pedal. In short, provide
   reasonably full MIDI controls. *(In progress.)*
 
-* [ ] Extend the fixed linear attack-release (AR) envelope,
-  to full ADSR and make configurable. Seperate envelopes
-  should be able to be applied to separate operators where
-  this makes sense. *(In progress.)*
+* [ ] Seperate envelopes should be able to be applied to
+  separate operators where this makes sense.
 
 * [ ] Add a VCF.
 
