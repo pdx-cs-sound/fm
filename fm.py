@@ -636,9 +636,6 @@ class Note(object):
         # samples and auto-increments.
         t = self.t
 
-        # This is used throughout.
-        sus = self.sus
-
         # Check for release.
         rt = self.release_time
         if rt is not None:
@@ -651,6 +648,7 @@ class Note(object):
 
             # Get the necessary parameters for the release
             # block.
+            sus = self.sus
             rl = self.release_length
             end = rt + rl
 
@@ -701,12 +699,14 @@ class Note(object):
             # Are we done?
             n -= num
             if n == 0:
+                self.sus = levels[-1]
                 return levels
             # Bump virtual time forward.
             t = te
 
         # Decay phase. Signal slopes down from 1 to sus
         # over the decay time.
+        esus = self.env.sustain
         dt = ta
         dl = self.env.decay
         te = dt + dl
@@ -714,8 +714,8 @@ class Note(object):
             te = min(t + n, dt + dl)
             num = te - t
             dlevels = np.linspace(
-                1 + (sus - 1) * (t - dt) / dl,
-                1 + (sus - 1) * (te - dt) / dl,
+                1 + (esus - 1) * (t - dt) / dl,
+                1 + (esus - 1) * (te - dt) / dl,
                 num = num,
                 endpoint = False,
                 dtype = np.float32,
@@ -724,13 +724,15 @@ class Note(object):
             # Are we done?
             n -= num
             if n == 0:
+                self.sus = levels[-1]
                 return levels
             # Bump virtual time forward.
             t = te
                 
         # Sustain phase. This is easy: just fill with
         # sustain samples.
-        levels = np.append(levels, sus + np.zeros(n, dtype=np.float32))
+        levels = np.append(levels, esus + np.zeros(n, dtype=np.float32))
+        self.sus = levels[-1]
         return levels
 
     def samples(self, n = 1):
