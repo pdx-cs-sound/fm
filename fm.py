@@ -608,7 +608,7 @@ class Note(object):
             sustain = args.a_sustain,
             release = args.t_release,
         )
-
+        self.sus = self.env.sustain
 
     def off(self, velocity):
         """Note is turned off. Start release."""
@@ -621,57 +621,118 @@ class Note(object):
         """Return the envelope for n samples from the given note at
         the given time.  Returns None when note should be
         dropped."""
+
+        # Envelope generation is a pain in the neck,
+        # especially given multiple samples. It is possible
+        # for the current segment of envelope to span
+        # attack, decay and sustain, or to span release and
+        # continue "off the end". It is also possible to
+        # have "early release", at which point release
+        # happens either from the current level or the
+        # nominal sustain level: we choose the former.
+
+        
+        # Every note has a built-in timer that starts at 0
+        # samples and auto-increments.
         t = self.t
+
+        # This is used throughout.
+        sus = self.sus
+
+        # Check for release.
         rt = self.release_time
         if rt is not None:
-            # Release is special.
+
+            # Release is special. We generate a block of
+            # samples on the slope from the effective
+            # sustain (level where the key was released) to
+            # 0. If the block is too short, we extend it
+            # with more 0s to make it the right length.
+
+            # Get the necessary parameters for the release
+            # block.
             rl = self.release_length
-            sus = self.env.sustain
             end = rt + rl
-            # 0...a...d......rt..t..end
+
+            # The signal had level sus at time rt.  We are
+            # now at some later time t..t+n.  If there are
+            # no valid release envelope samples to deliver,
+            # we're done with the note.
             if t >= end:
                 return None
-            m = min(n, end - t)
+            # We now deliver an approriate part of the release
+            # envelope. If t+n is "off the end" of the release,
+            # we deliver what we've got with zeros appended.
+            # Note that the reverse slope requires
+            # special attention.
+            te = min(t + n, end)
             levels = np.linspace(
-                sus * (end - t) / rl,
-                sus * (end - t + m) / rl,
-                num = m,
+                sus - sus * (t - rt) / rl,
+                sus - sus * (te - rt) / rl,
+                num = te - t,
                 endpoint = False,
                 dtype = np.float32,
             )
-            if m < n:
-                np.append(times, np.zeros(m - n))
+            # Pad with zero values to complete block if needed.
+            if t + n > end:
+                np.append(levels, np.zeros(t + n - end))
             return levels
-        # Piece together attack, decay, sustain.
-        a = self.env.attack
-        times = np.array(dtype=np.float32)
-        if t < at:
-            # Attack.
-            # 0...a...d...
-            m = min(a - t, n)
+
+        # We are pre-release. Figure out which phases
+        # we are in, and build up samples accordingly.
+        # Start with an empty sample array, and append.
+        levels = np.array([], dtype=np.float32)
+
+        # Attack phase. Envelope slopes up from 0 to 1
+        # during the attack time.
+        ta = self.env.attack
+        if t < ta:
+            # Build up samples for the attack phase.
+            te = min(t + n, ta)
+            num = te - t
             alevels = np.linspace(
-                t / a,
-                (t + m) / a,
-                num = m,
+                t / ta,
+                te / ta,
+                num = num,
                 endpoint = False,
                 dtype = np.float32,
             )
-            times.append(alevels)
-            t += m
-        # XXX HERE
-        d = self.env.decay
-        if len(times) < n and t < a + d:
-            # Decay.
-            # ..a...d...
-            m = min(a + d - t, n)
-            alevels = np.linspace(
-                t / a,
-                (t + m) / a,
-                num = m,
+            levels = np.append(levels, alevels)
+            # Are we done?
+            n -= num
+            if n == 0:
+                return levels
+            # Bump virtual time forward.
+            t = te
+
+        # Decay phase. Signal slopes down from 1 to sus
+        # over the decay time.
+        dt = ta
+        dl = self.env.decay
+        te = dt + dl
+        if t < te:
+            te = min(t + n, dt + dl)
+            num = te - t
+            dlevels = np.linspace(
+                1 + (sus - 1) * (t - dt) / dl,
+                1 + (sus - 1) * (te - dt) / dl,
+                num = num,
                 endpoint = False,
                 dtype = np.float32,
             )
+            levels = np.append(levels, dlevels)
+            # Are we done?
+            n -= num
+            if n == 0:
+                return levels
+            # Bump virtual time forward.
+            t = te
                 
+        # Sustain phase. This is easy: just fill with
+        # sustain samples.
+        levels = np.append(levels, sus + np.zeros(n, dtype=np.float32))
+        return levels
+
     def samples(self, n = 1):
         """Return the next n samples for this key."""
         samples = self.gen.samples(self.t, n = n)
