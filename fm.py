@@ -117,18 +117,19 @@ class FM(object):
         self.sine = Sine(f)
         # XXX It turns out to sound better to have the
         # modulation frequency adapt to the note frequency.
-        self.lfo = Sine(f + fmod)
+        self.lfo = Sine(f * fmod)
         self.amod = amod
 
     def samples(self, t, tv = None, n = 1):
         """Return the next n samples from this generator."""
-        depth = control_modwheel.value()
-        tmod = self.amod * depth * self.lfo.samples(t, n=n)
+        amod = self.amod
+        depth = 10**(amod * control_modwheel.value())
+        tmod = depth * self.lfo.samples(t, n=n)
         return self.sine.samples(t, tv=tmod, n=n)
 
 class GenFM(object):
     """FM VCO factory."""
-    def __init__(self, fmod=2, amod=100):
+    def __init__(self, fmod=2, amod=6):
         """Make a new FM generator generator."""
         self.fmod = fmod
         self.amod = amod
