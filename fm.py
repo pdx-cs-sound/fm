@@ -13,7 +13,7 @@ rate = 48000
 # to inhibit clipping.
 compression = 5
 
-import argparse, array, math, mido, sounddevice, toml, sys, wave
+import argparse, array, math, mido, queue, sounddevice, toml, sys, wave
 import numpy as np
 import numpy.fft as fft
 
@@ -251,6 +251,16 @@ class GenWave(object):
     def __call__(self, f):
         return Wave(self.wavetable, self.f0, f)
 
+input_queue = None
+
+def input_callback(in_data, frame_count, time_info, status):
+    """Get voice frames from PortAudio."""
+    if debugging and status != 0:
+        print("icb", status)
+    if input_queue:
+        for i in range(frame_count):
+            input_queue.put(in_data[i])
+
 # Process command-line arguments.
 ap = argparse.ArgumentParser()
 ap.add_argument(
@@ -295,6 +305,11 @@ ap.add_argument(
     help="Use wave (sampling) generator with given .wav file",
     type=str,
     metavar="WAVFILE",
+)
+ap.add_argument(
+    "--vocoder",
+    help="Vocode from default audio input",
+    action = "store_true",
 )
 ap.add_argument(
     "--just",
@@ -395,6 +410,17 @@ get_gen("fm", GenFM, argstype="list")
 get_gen("wave", GenWave, argstype="string")
 if generator is None:
     generator = GenFM()
+
+input_stream = None
+if args.vocoder:
+    input_queue = queue.Queue(args.buffer_size)
+    input_stream = sounddevice.InputStream(
+        samplerate=48000,
+        channels=1,
+        blocksize=args.buffer_size,
+        callback=input_callback,
+    )
+    input_stream.start()
 
 # Global sample clock, indicating the number of samples
 # played since synthesizer start (excluding underruns).
@@ -758,13 +784,26 @@ def mix(n = 1):
 
     # Do gain adjustments based on number of playing notes.
     if n_notes == 0:
-        return np.array([0] * n)
+        s = np.array([0] * n)
+    if input_queue:
+        try:
+            # Flush queue to get most recent samples.
+            while input_queue.qsize() > n:
+                input_queue.get(block=False)
+            # Mix in most recent samples.
+            for i in range(n):
+                s[i] += 10 * input_queue.get()
+        except AttributeError:
+            # Input queue may disappear (become None)
+            # during shutdown.
+            pass
+        n_notes += 1
     return control_volume.value() * s / max(n_notes, compression)
 
-def callback(out_data, frame_count, time_info, status):
+def output_callback(out_data, frame_count, time_info, status):
     """Supply frames to PortAudio."""
     if debugging and status != 0:
-        print("cb", status)
+        print("ocb", status)
     # Get frames of waveform.
     frames = mix(n = frame_count)
     # Adjust the sample clock.
@@ -774,58 +813,75 @@ def callback(out_data, frame_count, time_info, status):
     out_data[:] = np.reshape(frames, (frame_count, 1))
 
 # Set up the audio output stream.
-stream = sounddevice.OutputStream(
+output_stream = sounddevice.OutputStream(
     samplerate=48000,
     channels=1,
     blocksize=args.buffer_size,
-    callback=callback,
+    callback=output_callback,
 )
-stream.start()
+output_stream.start()
 
-# Process key events and modify the PA play freq.
-while True:
-    mesg = inport.receive()
-    mesg_type = mesg.type
-    if mesg_type == 'note_on' and mesg.velocity == 0:
-        mesg_type = 'note_off'
-    if mesg_type == 'note_on':
-        key = mesg.note
-        velocity = mesg.velocity / 127
-        debug('note on', key, mesg.velocity, round(velocity, 2))
-        assert key not in keymap
-        note = Note(key, velocity, generator)
-        keymap[key] = note
-        notemap.add(note)
-    elif mesg_type == 'note_off':
-        key = mesg.note
-        velocity = mesg.velocity / 127
-        debug('note off', key, mesg.velocity, round(velocity, 2))
-        if key in keymap:
-            keymap[key].off(velocity)
-            del keymap[key]
-    elif mesg.type == 'control_change':
-        if mesg.control == button_stop:
-            break
-        elif mesg.control in controls:
-            # XXX Kludge to stop the synth when a knob is
-            # turned to zero.
-            if mesg.control == control_stop and mesg.value == 0:
+try:
+    # Process key events and modify the PA play freq.
+    while True:
+        mesg = inport.receive()
+        mesg_type = mesg.type
+        if mesg_type == 'note_on' and mesg.velocity == 0:
+            mesg_type = 'note_off'
+        if mesg_type == 'note_on':
+            key = mesg.note
+            velocity = mesg.velocity / 127
+            debug('note on', key, mesg.velocity, round(velocity, 2))
+            assert key not in keymap
+            note = Note(key, velocity, generator)
+            keymap[key] = note
+            notemap.add(note)
+        elif mesg_type == 'note_off':
+            key = mesg.note
+            velocity = mesg.velocity / 127
+            debug('note off', key, mesg.velocity, round(velocity, 2))
+            if key in keymap:
+                keymap[key].off(velocity)
+                del keymap[key]
+        elif mesg.type == 'control_change':
+            if mesg.control == button_stop:
                 break
-            c = controls[mesg.control]
-            debug(f"control {c.name()} = {mesg.value}")
-            c.set(mesg.value)
-        elif mesg.control in control_suppressed:
-            pass
+            elif mesg.control in controls:
+                # XXX Kludge to stop the synth when a knob is
+                # turned to zero.
+                if mesg.control == control_stop and mesg.value == 0:
+                    break
+                c = controls[mesg.control]
+                debug(f"control {c.name()} = {mesg.value}")
+                c.set(mesg.value)
+            elif mesg.control in control_suppressed:
+                pass
+            else:
+                debug(f'unknown control {mesg.control}')
         else:
-            debug(f'unknown control {mesg.control}')
-    else:
-        debug('unknown message', mesg)
+            debug('unknown message', mesg)
+except KeyboardInterrupt:
+    pass
 
 # Done, clean up and exit.
 debug('exiting')
+
+# Turn off the keys.
 for key in set(keymap):
     keymap[key].off(1.0)
     del keymap[key]
 notemap = set()
-stream.stop()
-stream.close()
+
+if input_stream:
+    # Disable the input queue, then flush with zeros to free up
+    # any blocked output callback.
+    input_stream.stop()
+    input_stream.close()
+    xinput_queue = input_queue
+    input_queue = None
+    for _ in range(args.buffer_size):
+        xinput_queue.put(0)
+
+# Stop the output.
+output_stream.stop()
+output_stream.close()
