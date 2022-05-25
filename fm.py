@@ -251,6 +251,22 @@ class GenWave(object):
     def __call__(self, f):
         return Wave(self.wavetable, self.f0, f)
 
+class GoertzelFilter(object):
+    """https://en.wikipedia.org/wiki/Goertzel_algorithm eqn 6"""
+    def __init__(self, freq, length):
+        """Build the filter."""
+        w = 2 * math.pi * freq / rate
+        self.norm = np.exp(complex(0, w * length))
+        fwindow = np.blackman(length)
+        self.coeff = fwindow * np.array([np.exp(complex(0, -w * k))
+                               for k in range(length)])
+        self.length = length
+
+    def filter(self, samples):
+        """Run the filter on some samples."""
+        assert len(samples) == self.length
+        return self.norm * np.dot(self.coeff, samples)
+
 input_queue = None
 
 def input_callback(in_data, frame_count, time_info, status):
@@ -329,6 +345,12 @@ ap.add_argument(
     type=int,
     default=48,
     metavar="SAMPLES",
+)
+ap.add_argument(
+    "--filter-width",
+    help="Width of bandpass filters in msecs",
+    type=float,
+    default=20,
 )
 ap.add_argument(
     "--t-attack",
@@ -410,17 +432,6 @@ get_gen("fm", GenFM, argstype="list")
 get_gen("wave", GenWave, argstype="string")
 if generator is None:
     generator = GenFM()
-
-input_stream = None
-if args.vocoder:
-    input_queue = queue.Queue(args.buffer_size)
-    input_stream = sounddevice.InputStream(
-        samplerate=48000,
-        channels=1,
-        blocksize=args.buffer_size,
-        callback=input_callback,
-    )
-    input_stream.start()
 
 # Global sample clock, indicating the number of samples
 # played since synthesizer start (excluding underruns).
@@ -615,9 +626,26 @@ def key_to_freq(key):
     return base_freq * 2**octave * ratios[offset]
 
 key_freq = [key_to_freq(key) for key in range(128)]
-# if debugging:
-#     for i, f in enumerate(key_freq):
-#         debug(f"key {i} = {f}")
+
+input_stream = None
+filter_bank = None
+if args.vocoder:
+    # Set up the voice input system.
+    input_queue = queue.Queue(args.buffer_size)
+    input_stream = sounddevice.InputStream(
+        samplerate=48000,
+        channels=1,
+        blocksize=args.buffer_size,
+        callback=input_callback,
+    )
+    input_stream.start()
+
+    # Set up the filter bank.
+    filter_bank = []
+    for key in range(128):
+        freq = key_freq[key]
+        width = int(rate * args.filter_width * 0.001)
+        filter_bank.append(GoertzelFilter(freq, width))
 
 class Note(object):
     """Note generator with envelope processing."""
