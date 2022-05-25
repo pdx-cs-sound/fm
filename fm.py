@@ -13,7 +13,7 @@ rate = 48000
 # to inhibit clipping.
 compression = 5
 
-import argparse, array, math, mido, queue, sounddevice, toml, sys, wave
+import argparse, array, collections, math, mido, sounddevice, toml, sys, wave
 import numpy as np
 import numpy.fft as fft
 
@@ -273,9 +273,11 @@ def input_callback(in_data, frame_count, time_info, status):
     """Get voice frames from PortAudio."""
     if debugging and status != 0:
         print("icb", status)
-    if input_queue:
-        for i in range(frame_count):
-            input_queue.put(in_data[i])
+    assert in_data.shape == (filter_width, 1), f"bad shape {in_data.shape}"
+    global input_queue
+    if input_queue is not None:
+        in_data = np.reshape(in_data, (-1,))
+        input_queue += in_data.tolist()
 
 # Process command-line arguments.
 ap = argparse.ArgumentParser()
@@ -386,6 +388,8 @@ ap.add_argument(
     action="store_true",
 )
 args = ap.parse_args()
+
+filter_width = int(rate * args.filter_width * 0.001)
 
 tuning = None
 for base, name in [(args.just, "just"), (args.pyth, "pyth")]:
@@ -630,12 +634,15 @@ key_freq = [key_to_freq(key) for key in range(128)]
 input_stream = None
 filter_bank = None
 if args.vocoder:
-    # Set up the voice input system.
-    input_queue = queue.Queue(args.buffer_size)
+    # Set up the voice input system. Make sure to have
+    # a full queue to begin with, so that the mixer
+    # does not underrun.
+    w = filter_width
+    input_queue = collections.deque([0.] * 2 * w, 2 * w)
     input_stream = sounddevice.InputStream(
         samplerate=48000,
         channels=1,
-        blocksize=args.buffer_size,
+        blocksize=w,
         callback=input_callback,
     )
     input_stream.start()
@@ -644,8 +651,7 @@ if args.vocoder:
     filter_bank = []
     for key in range(128):
         freq = key_freq[key]
-        width = int(rate * args.filter_width * 0.001)
-        filter_bank.append(GoertzelFilter(freq, width))
+        filter_bank.append(GoertzelFilter(freq, filter_width))
 
 class Note(object):
     """Note generator with envelope processing."""
@@ -811,20 +817,12 @@ def mix(n = 1):
         n_notes += 1
 
     # Do gain adjustments based on number of playing notes.
-    if n_notes == 0:
-        s = np.array([0] * n)
-    if input_queue:
-        try:
-            # Flush queue to get most recent samples.
-            while input_queue.qsize() > n:
-                input_queue.get(block=False)
-            # Mix in most recent samples.
-            for i in range(n):
-                s[i] += 10 * input_queue.get()
-        except AttributeError:
-            # Input queue may disappear (become None)
-            # during shutdown.
-            pass
+    global input_queue
+    if input_queue is not None and len(input_queue) >= n:
+        for i in range(n):
+            v = input_queue.popleft()
+            # assert type(v) == float, f"type {type(v)}"
+            s[i] += v
         n_notes += 1
     return control_volume.value() * s / max(n_notes, compression)
 
@@ -901,14 +899,9 @@ for key in set(keymap):
 notemap = set()
 
 if input_stream:
-    # Disable the input queue, then flush with zeros to free up
-    # any blocked output callback.
+    # Stop the input.
     input_stream.stop()
     input_stream.close()
-    xinput_queue = input_queue
-    input_queue = None
-    for _ in range(args.buffer_size):
-        xinput_queue.put(0)
 
 # Stop the output.
 output_stream.stop()
