@@ -117,23 +117,38 @@ def clamp_signed(v):
         v = -128
     return v
 
+class GenDiffSynth(object):
+    def __init__(self, spec):
+        parts = spec.split(":")
+        assert len(parts) == 2, "bad diffsynth spec"
+        self.ring_size = int(parts[0])
+        init_terms = parts[1].split("/")
+        inits = []
+        for term in init_terms:
+            frac, val = term.split(",")
+            inits.append((float(frac), int(val)))
+        self.inits = inits
+
+    def __call__(self, f):
+        return DiffSynth(f, self.ring_size, self.inits)
+
 class DiffSynth(object):
     """DiffSynth VCO."""
-    def __init__(self, f):
-        self.ringSize = 32
-        self.inits = [(0, 127), (0.3, 63), (0.6, 31)]
+    def __init__(self, f, ring_size, inits):
+        self.ring_size = ring_size
+        self.inits = inits
         self.steps_per_second = rate / f
         self.step = 0
-        self.ring = [0] * self.ringSize
+        self.ring = [0] * self.ring_size
         for (i, v) in self.inits:
-            self.ring[int(i * self.ringSize)] = v
+            self.ring[int(i * self.ring_size)] = v
         self.ptr = 0
         self.cur = self.synthesize()
 
     def inc(self, ptr):
         ptr += 1
-        while ptr >= self.ringSize:
-            ptr -= self.ringSize
+        while ptr >= self.ring_size:
+            ptr -= self.ring_size
         return ptr
 
     def synthesize(self):
@@ -336,7 +351,10 @@ ap.add_argument(
 ap.add_argument(
     "--diff", "--diffsynth",
     help="Use diffsynth wave generator",
-    action="store_true",
+    type=str,
+    nargs="?",
+    const="32:0,127/0.3,63/0.6,31",
+    metavar="SPEC",
 )
 ap.add_argument(
     "--fm", "--FM",
@@ -443,16 +461,15 @@ def get_gen(name, gen, argstype="flag"):
             generator = mygen
             debug(f"generator {name}")
 
-
 basics = {
     "saw": Saw,
     "sine": Sine,
     "square": Square,
     "tri": Triangle,
-    "diff": DiffSynth,
 }
 for name in basics:
     get_gen(name, basics[name])
+get_gen("diff", GenDiffSynth, argstype="string")
 get_gen("fm", GenFM, argstype="list")
 get_gen("wave", GenWave, argstype="string")
 if generator is None:

@@ -138,7 +138,7 @@ configured from the command line.
     * [x] Validate sample range to make sure the conversions 
       are being done correctly. Also, clean up synthesis code.
 
-    * [ ] Allow ring length, initial conditions to be
+    * [x] Allow ring length, initial conditions to be
       specified.
 
     * [ ] Use resampling instead of sample duplication to get
