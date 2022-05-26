@@ -135,16 +135,16 @@ configured from the command line.
 
     * [x] Implement proof of concept.
 
-    * [ ] Validate sample range to make sure the conversions 
+    * [x] Validate sample range to make sure the conversions 
       are being done correctly. Also, clean up synthesis code.
 
-    * [ ] Figure out how to use `numpy`.
+    * [ ] Allow ring length, initial conditions to be
+      specified.
 
     * [ ] Use resampling instead of sample duplication to get
       sample rate.
 
-    * [ ] Allow ring length, initial conditions to be
-      specified.
+    * [ ] Figure out how to use `numpy`.
 
     * [ ] Allow larger than 8-bit value range. (However, this
       isn't really in the spirit of the technique.)
