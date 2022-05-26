@@ -104,6 +104,11 @@ A small selection of sounds can be chosen from the command line.
 
   * `car-horn.wav`: The author's car horn
 
+* `--diff`: "Differential synthesis." Solves a second-order
+  differential equation with interesting initial conditions
+  to get a noisy, grindy kind of sound. Uses minimal
+  computation on an 8-bit microprocessor.
+
 ### Tuning
 
 [Five-limit Just intonation](https://en.wikipedia.org/wiki/Just_intonation#Five-limit_tuning)
@@ -125,6 +130,26 @@ all keys. The defaults are reasonable. The envelope can be
 configured from the command line.
 
 ## Status
+
+* [ ] Finish differential synthesis.
+
+    * [x] Implement proof of concept.
+
+    * [ ] Validate sample range to make sure the conversions 
+      are being done correctly. Also, clean up synthesis code.
+
+    * [ ] Figure out how to use `numpy`.
+
+    * [ ] Use resampling instead of sample duplication to get
+      sample rate.
+
+    * [ ] Allow ring length, initial conditions to be
+      specified.
+
+    * [ ] Allow larger than 8-bit value range. (However, this
+      isn't really in the spirit of the technique.)
+
+    * [ ] Allow full differential equations to be specified.
 
 * [x] The instrument by default tries to listen for a MIDI
   keyboard connection established by manual connection. This
