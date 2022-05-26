@@ -110,13 +110,6 @@ class Square(object):
         a = self.tmul * times
         return 2.0 * (2.0 * np.floor(a) - np.floor(2.0 * a)) + 1.0
 
-# XXX Do we even need this?
-def shift_div(v, s):
-    if v < 0:
-        return -(-v >> s)
-    else:
-        return v >> s
-
 def clamp_signed(v):
     if v > 127:
         v = 127
@@ -150,9 +143,9 @@ class DiffSynth(object):
         v0 = self.ring[i0]
         v1 = self.ring[i1]
         v2 = self.ring[i2]
-        d1 = shift_div(v1 - v0, 0)
-        d2 = shift_div(v2 - v1, 0)
-        dd = shift_div(d1 - d2, 1)
+        d1 = v1 - v0
+        d2 = v2 - v1
+        dd = (d1 - d2) >> 1
         v = clamp_signed(-dd)
         self.ring[i0] = v
         self.ptr = i1
