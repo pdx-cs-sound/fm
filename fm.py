@@ -152,14 +152,14 @@ class DiffSynth(object):
         return v
 
     def samples(self, t, tv = None, n = 1):
-        result = []
+        synthed = []
         for i in range(n):
-            result.append(self.cur)
+            synthed.append(self.cur)
             self.step += 1
             if self.step >= self.steps_per_second:
                 self.cur = self.synthesize()
                 self.step = 0
-        return 2 * np.array(result, dtype=np.float32) / 255 - 1
+        return np.array(synthed, dtype=np.float32) / 128
 
 class FM(object):
     """FM VCO."""
