@@ -110,6 +110,64 @@ class Square(object):
         a = self.tmul * times
         return 2.0 * (2.0 * np.floor(a) - np.floor(2.0 * a)) + 1.0
 
+# XXX Do we even need this?
+def shift_div(v, s):
+    if v < 0:
+        return -(-v >> s)
+    else:
+        return v >> s
+
+def clamp_signed(v):
+    if v > 127:
+        v = 127
+    if v < -128:
+        v = -128
+    return v
+
+class DiffSynth(object):
+    """DiffSynth VCO."""
+    def __init__(self, f):
+        self.ringSize = 32
+        self.inits = [(0, 127), (0.3, 63), (0.6, 31)]
+        self.steps_per_second = rate / f
+        self.step = 0
+        self.ring = [0] * self.ringSize
+        for (i, v) in self.inits:
+            self.ring[int(i * self.ringSize)] = v
+        self.ptr = 0
+        self.cur = self.synthesize()
+
+    def inc(self, ptr):
+        ptr += 1
+        while ptr >= self.ringSize:
+            ptr -= self.ringSize
+        return ptr
+
+    def synthesize(self):
+        i0 = self.ptr
+        i1 = self.inc(i0)
+        i2 = self.inc(i1)
+        v0 = self.ring[i0]
+        v1 = self.ring[i1]
+        v2 = self.ring[i2]
+        d1 = shift_div(v1 - v0, 0)
+        d2 = shift_div(v2 - v1, 0)
+        dd = shift_div(d1 - d2, 1)
+        v = clamp_signed(-dd)
+        self.ring[i0] = v
+        self.ptr = i1
+        return v
+
+    def samples(self, t, tv = None, n = 1):
+        result = []
+        for i in range(n):
+            result.append(self.cur)
+            self.step += 1
+            if self.step >= self.steps_per_second:
+                self.cur = self.synthesize()
+                self.step = 0
+        return 2 * np.array(result, dtype=np.float32) / 255 - 1
+
 class FM(object):
     """FM VCO."""
     def __init__(self, f, fmod, amod):
@@ -312,6 +370,11 @@ ap.add_argument(
     action="store_true",
 )
 ap.add_argument(
+    "--diff", "--diffsynth",
+    help="Use diffsynth wave generator",
+    action="store_true",
+)
+ap.add_argument(
     "--fm", "--FM",
     help="Use FM generator with given mod delta-freq and depth",
     nargs=2,
@@ -429,7 +492,14 @@ def get_gen(name, gen, argstype="flag"):
             generator = mygen
             debug(f"generator {name}")
 
-basics = {"saw": Saw, "sine": Sine, "square": Square, "tri": Triangle}
+
+basics = {
+    "saw": Saw,
+    "sine": Sine,
+    "square": Square,
+    "tri": Triangle,
+    "diff": DiffSynth,
+}
 for name in basics:
     get_gen(name, basics[name])
 get_gen("fm", GenFM, argstype="list")
