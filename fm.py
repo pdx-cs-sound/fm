@@ -110,6 +110,72 @@ class Square(object):
         a = self.tmul * times
         return 2.0 * (2.0 * np.floor(a) - np.floor(2.0 * a)) + 1.0
 
+def clamp_signed(v):
+    if v > 127:
+        v = 127
+    if v < -128:
+        v = -128
+    return v
+
+class GenDiffSynth(object):
+    def __init__(self, spec):
+        parts = spec.split(":")
+        assert len(parts) == 2, "bad diffsynth spec"
+        self.ring_size = int(parts[0])
+        init_terms = parts[1].split("/")
+        inits = []
+        for term in init_terms:
+            frac, val = term.split(",")
+            inits.append((float(frac), int(val)))
+        self.inits = inits
+
+    def __call__(self, f):
+        return DiffSynth(f, self.ring_size, self.inits)
+
+class DiffSynth(object):
+    """DiffSynth VCO."""
+    def __init__(self, f, ring_size, inits):
+        self.ring_size = ring_size
+        self.inits = inits
+        self.steps_per_second = rate / f
+        self.step = 0
+        self.ring = [0] * self.ring_size
+        for (i, v) in self.inits:
+            self.ring[int(i * self.ring_size)] = v
+        self.ptr = 0
+        self.cur = self.synthesize()
+
+    def inc(self, ptr):
+        ptr += 1
+        while ptr >= self.ring_size:
+            ptr -= self.ring_size
+        return ptr
+
+    def synthesize(self):
+        i0 = self.ptr
+        i1 = self.inc(i0)
+        i2 = self.inc(i1)
+        v0 = self.ring[i0]
+        v1 = self.ring[i1]
+        v2 = self.ring[i2]
+        d1 = v1 - v0
+        d2 = v2 - v1
+        dd = (d1 - d2) >> 1
+        v = clamp_signed(-dd)
+        self.ring[i0] = v
+        self.ptr = i1
+        return v
+
+    def samples(self, t, tv = None, n = 1):
+        synthed = []
+        for i in range(n):
+            synthed.append(self.cur)
+            self.step += 1
+            if self.step >= self.steps_per_second:
+                self.cur = self.synthesize()
+                self.step = 0
+        return np.array(synthed, dtype=np.float32) / 128
+
 class FM(object):
     """FM VCO."""
     def __init__(self, f, fmod, amod):
@@ -284,6 +350,14 @@ ap.add_argument(
     action="store_true",
 )
 ap.add_argument(
+    "--diff", "--diffsynth",
+    help="Use diffsynth wave generator",
+    type=str,
+    nargs="?",
+    const="32:0,127/0.3,63/0.6,31",
+    metavar="SPEC",
+)
+ap.add_argument(
     "--fm", "--FM",
     help="Use FM generator with given mod delta-freq and depth",
     nargs=2,
@@ -388,9 +462,15 @@ def get_gen(name, gen, argstype="flag"):
             generator = mygen
             debug(f"generator {name}")
 
-basics = {"saw": Saw, "sine": Sine, "square": Square, "tri": Triangle}
+basics = {
+    "saw": Saw,
+    "sine": Sine,
+    "square": Square,
+    "tri": Triangle,
+}
 for name in basics:
     get_gen(name, basics[name])
+get_gen("diff", GenDiffSynth, argstype="string")
 get_gen("fm", GenFM, argstype="list")
 get_gen("wave", GenWave, argstype="string")
 if generator is None:
