@@ -318,6 +318,28 @@ class GenWave(object):
     def __call__(self, f):
         return Wave(self.wavetable, self.f0, f)
 
+class EnvelopeAGC(object):
+    def __init__(self):
+        self.gain = 0.005
+        self.peak_envelope = 0.00001
+
+    def record_peak(self, peak):
+        e = self.peak_envelope
+        if e is None:
+            e = peak
+        self.peak_envelope = max(e, peak)
+
+    def agc(self):
+        l = 0.8
+        self.gain = l * self.gain + (1 - l) * self.peak_envelope
+        self.peak_envelope = 0.00001
+        g = self.gain
+        if g <= 0.001:
+            return 0
+        return 1 / g
+
+envelope_agc = EnvelopeAGC()
+
 nfollower = 8
 follower_filter = ss.iirfilter(
     nfollower,
@@ -359,6 +381,7 @@ class NoteVocoder(object):
             np.abs(mod_filtered),
             zi=self.follower_state,
         )
+        envelope_agc.record_peak(max(envelope))
         # Bandpass filter the carrier.
         car_filtered, self.carrier_state = ss.sosfilt(
             self.bandpass,
@@ -930,9 +953,9 @@ def mix(n = 1):
     if input_queue is not None and len(input_queue) >= n:
         voice = np.array([input_queue.popleft() for _ in range(n)])
         s0 = np.zeros(n)
-        for i, note in enumerate(notemap):
+        for i, note in enumerate(set(notemap)):
             s0 += note.vocoder.vocode(voice, s)
-        s = s0
+        s = s0 * envelope_agc.agc()
             
     return control_volume.value() * s / max(n_notes, compression)
 
