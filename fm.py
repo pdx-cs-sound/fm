@@ -338,8 +338,6 @@ class EnvelopeAGC(object):
             return 0
         return 1 / g
 
-envelope_agc = EnvelopeAGC()
-
 nfollower = 8
 follower_filter = ss.iirfilter(
     nfollower,
@@ -381,7 +379,8 @@ class NoteVocoder(object):
             np.abs(mod_filtered),
             zi=self.follower_state,
         )
-        envelope_agc.record_peak(max(envelope))
+        if envelope_agc:
+            envelope_agc.record_peak(max(envelope))
         # Bandpass filter the carrier.
         car_filtered, self.carrier_state = ss.sosfilt(
             self.bandpass,
@@ -463,6 +462,11 @@ ap.add_argument(
     action = "store_true",
 )
 ap.add_argument(
+    "--vocoder-gain",
+    help="Envelope gain for vocoder",
+    type = float,
+)
+ap.add_argument(
     "--just",
     help="Use (five-limit) just intonation (root is BASE half-steps above A)",
     type=int,
@@ -521,6 +525,12 @@ ap.add_argument(
     action="store_true",
 )
 args = ap.parse_args()
+
+if args.vocoder_gain:
+    envelope_agc = None
+    vocoder_gain = args.vocoder_gain
+else:
+    envelope_agc = EnvelopeAGC()
 
 tuning = None
 for base, name in [(args.just, "just"), (args.pyth, "pyth")]:
@@ -955,7 +965,11 @@ def mix(n = 1):
         s0 = np.zeros(n)
         for i, note in enumerate(set(notemap)):
             s0 += note.vocoder.vocode(voice, s)
-        s = s0 * envelope_agc.agc()
+        if envelope_agc:
+            g = envelope_agc.agc()
+        else:
+            g = vocoder_gain
+        s = s0 * g
             
     return control_volume.value() * s / max(n_notes, compression)
 
