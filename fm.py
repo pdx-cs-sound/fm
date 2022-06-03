@@ -335,7 +335,7 @@ class EnvelopeAGC(object):
         self.peak_envelope = 0.00001
         g = self.gain
         if g <= 0.001:
-            return 0
+            return 100
         return 1 / g
 
 nfollower = 8
@@ -381,6 +381,18 @@ class NoteVocoder(object):
         )
         if envelope_agc:
             envelope_agc.record_peak(max(envelope))
+
+        ncarrier = len(carrier)
+        nenvelope = len(envelope)
+        assert nenvelope > 0, "empty modulator"
+        if nenvelope < ncarrier:
+            envelope = np.append(envelope, np.array(
+                [envelope[-1]] * (ncarrier - nenvelope)
+            ))
+        elif ncarrier < nenvelope:
+            carrier = np.append(carrier, np.zeros(nenvelope - ncarrier))
+        assert len(carrier) == len(envelope), f"carrier {ncarrier}, envelope {nenvelope}"
+
         # Bandpass filter the carrier.
         car_filtered, self.carrier_state = ss.sosfilt(
             self.bandpass,
@@ -960,8 +972,9 @@ def mix(n = 1):
 
     # Vocode if needed.
     global input_queue
-    if input_queue is not None and len(input_queue) >= n:
-        voice = np.array([input_queue.popleft() for _ in range(n)])
+    if input_queue is not None:
+        nvoice = min(len(input_queue), n)
+        voice = np.array([input_queue.popleft() for _ in range(nvoice)])
         s0 = np.zeros(n)
         for i, note in enumerate(set(notemap)):
             s0 += note.vocoder.vocode(voice, s)
