@@ -16,6 +16,7 @@ compression = 5
 import argparse, array, collections, math, mido, sounddevice, toml, sys, wave
 import numpy as np
 import numpy.fft as fft
+import scipy.signal as ss
 
 debugging = False
 def debug(*args, **kwargs):
@@ -317,29 +318,64 @@ class GenWave(object):
     def __call__(self, f):
         return Wave(self.wavetable, self.f0, f)
 
-class GoertzelFilter(object):
-    """https://en.wikipedia.org/wiki/Goertzel_algorithm eqn 6"""
-    def __init__(self, freq, length):
-        """Build the filter."""
-        w = 2 * math.pi * freq / rate
-        self.norm = np.exp(complex(0, w * length))
-        fwindow = np.blackman(length)
-        self.coeff = fwindow * np.array([np.exp(complex(0, -w * k))
-                               for k in range(length)])
-        self.length = length
+nfollower = 8
+follower_filter = ss.iirfilter(
+    nfollower,
+    50,
+    btype = 'lowpass',
+    output = 'sos',
+    fs = rate,
+)
 
-    def filter(self, samples):
-        """Run the filter on some samples."""
-        assert len(samples) == self.length
-        return self.norm * np.dot(self.coeff, samples)
+class NoteVocoder(object):
+    def __init__(self, freq):
+        """Build the filter."""
+        nbandpass = 4
+        self.bandpass = ss.iirfilter(
+            nbandpass,
+            (
+                max(1, freq * (1 - args.filter_width / 2)),
+                min(rate // 2 - 1, freq * (1 + args.filter_width / 2)),
+            ),
+            btype = 'bandpass',
+            output = 'sos',
+            fs = rate,
+        )
+        self.modulator_state = np.zeros((nbandpass, 2))
+        self.carrier_state = np.zeros((nbandpass, 2))
+        self.follower_state = np.zeros((nfollower // 2, 2))
+
+    def vocode(self, modulator, carrier):
+        """Run the vocoder on some samples."""
+        # Bandpass filter the modulator.
+        mod_filtered, self.modulator_state = ss.sosfilt(
+            self.bandpass,
+            modulator,
+            zi=self.modulator_state,
+        )
+        # Get the modulator envelope.
+        envelope, self.follower_state = ss.sosfilt(
+            follower_filter,
+            np.abs(mod_filtered),
+            zi=self.follower_state,
+        )
+        # Bandpass filter the carrier.
+        car_filtered, self.carrier_state = ss.sosfilt(
+            self.bandpass,
+            carrier,
+            zi=self.carrier_state,
+        )
+        return car_filtered * envelope
 
 input_queue = None
+# XXX For now, fixed 20ms latency.
+voice_latency = int(0.02 * rate)
 
 def input_callback(in_data, frame_count, time_info, status):
     """Get voice frames from PortAudio."""
     if debugging and status != 0:
         print("icb", status)
-    assert in_data.shape == (filter_width, 1), f"bad shape {in_data.shape}"
+    assert in_data.shape == (voice_latency, 1), f"bad shape {in_data.shape}"
     global input_queue
     if input_queue is not None:
         in_data = np.reshape(in_data, (-1,))
@@ -424,9 +460,9 @@ ap.add_argument(
 )
 ap.add_argument(
     "--filter-width",
-    help="Width of bandpass filters in msecs",
+    help="Width of bandpass filters as fraction of center",
     type=float,
-    default=20,
+    default=0.3,
 )
 ap.add_argument(
     "--t-attack",
@@ -462,8 +498,6 @@ ap.add_argument(
     action="store_true",
 )
 args = ap.parse_args()
-
-filter_width = int(rate * args.filter_width * 0.001)
 
 tuning = None
 for base, name in [(args.just, "just"), (args.pyth, "pyth")]:
@@ -712,12 +746,11 @@ def key_to_freq(key):
 key_freq = [key_to_freq(key) for key in range(128)]
 
 input_stream = None
-filter_bank = None
 if args.vocoder:
     # Set up the voice input system. Make sure to have
     # a full queue to begin with, so that the mixer
     # does not underrun.
-    w = filter_width
+    w = voice_latency
     input_queue = collections.deque([0.] * 2 * w, 2 * w)
     input_stream = sounddevice.InputStream(
         samplerate=48000,
@@ -726,12 +759,6 @@ if args.vocoder:
         callback=input_callback,
     )
     input_stream.start()
-
-    # Set up the filter bank.
-    filter_bank = []
-    for key in range(128):
-        freq = key_freq[key]
-        filter_bank.append(GoertzelFilter(freq, filter_width))
 
 class Note(object):
     """Note generator with envelope processing."""
@@ -750,6 +777,8 @@ class Note(object):
             release = args.t_release,
         )
         self.sus = self.env.sustain
+        if args.vocoder:
+            self.vocoder = NoteVocoder(key_freq[key])
 
     def off(self, velocity):
         """Note is turned off. Start release."""
@@ -896,14 +925,15 @@ def mix(n = 1):
         s += e * note.samples(n = n)
         n_notes += 1
 
-    # Do gain adjustments based on number of playing notes.
+    # Vocode if needed.
     global input_queue
     if input_queue is not None and len(input_queue) >= n:
-        for i in range(n):
-            v = input_queue.popleft()
-            # assert type(v) == float, f"type {type(v)}"
-            s[i] += v
-        n_notes += 1
+        voice = np.array([input_queue.popleft() for _ in range(n)])
+        s0 = np.zeros(n)
+        for i, note in enumerate(notemap):
+            s0 += note.vocoder.vocode(voice, s)
+        s = s0
+            
     return control_volume.value() * s / max(n_notes, compression)
 
 def output_callback(out_data, frame_count, time_info, status):
